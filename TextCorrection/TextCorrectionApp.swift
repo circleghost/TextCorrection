@@ -79,10 +79,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let compareThreshold = 100 // 累積多少字符後進行比較
     
     private var currentTextView: NSTextView?
-    private var progressIndicator: NSProgressIndicator?
     private var rewriteButton: NSButton?
     private var copyButton: NSButton?
-    private var animationTimer: Timer?
     private var loadingLabel: NSTextField?
     
     private var apiResponseText: String = ""
@@ -125,7 +123,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
-    1. 中文與英文之間，中文與數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
+    1. 中文與英文之間，中文數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情況不需調整：
        - 括弧內的說明，例如（圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
@@ -154,7 +152,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
-                alert.informativeText = "請在系統好設為 TextCorrection 啟功能權限，便應用程序能夠正常工作。"
+                alert.informativeText = "請在系統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
                 alert.addButton(withTitle: "打開系統偏好設置")
                 alert.addButton(withTitle: "取消")
                 
@@ -284,40 +282,76 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showTextWindow(text: String) {
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
+        
+        // 計算基於文字長度的視窗大小
+        let textLength = text.count
+        let width = min(max(400, CGFloat(textLength) * 5), screenFrame.width * 0.8)
+        let height = min(max(300, CGFloat(textLength) * 0.5), screenFrame.height * 0.8)
+        let size = NSSize(width: width, height: height)
+        
+        // 獲取當前游標位置
+        let mouseLocation = NSEvent.mouseLocation
+        let windowFrame = NSRect(origin: mouseLocation, size: size)
+        
+        // 確保視窗完全在螢幕內
+        let adjustedFrame = screenFrame.intersection(windowFrame)
+        
         if textWindow == nil {
-            textWindow = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 600, height: 500),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            textWindow = NSWindow(contentRect: adjustedFrame,
+                                  styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
-            textWindow?.title = "文字比較"
+            textWindow?.title = "AI 文字校正"
+            textWindow?.titlebarAppearsTransparent = true
+            textWindow?.isMovableByWindowBackground = true
+            textWindow?.backgroundColor = NSColor(red: 0.1, green: 0.1, blue: 0.15, alpha: 1.0)
             textWindow?.minSize = NSSize(width: 400, height: 300)
+        } else {
+            textWindow?.setFrame(adjustedFrame, display: true)
         }
         
-        let scrollView = NSScrollView(frame: (textWindow?.contentView?.bounds)!)
+        // 創建漸變背景
+        let gradientView = NSVisualEffectView(frame: (textWindow?.contentView?.bounds)!)
+        gradientView.material = .windowBackground  // 使用語義材質
+        gradientView.state = .active
+        gradientView.blendingMode = .behindWindow
+        
+        // 設置外觀為深色模式
+        gradientView.appearance = NSAppearance(named: .darkAqua)
+        
+        let scrollView = NSScrollView(frame: gradientView.bounds)
         scrollView.hasVerticalScroller = true
         scrollView.autoresizingMask = [.width, .height]
+        scrollView.drawsBackground = false
         
         let textView = NSTextView(frame: scrollView.bounds)
         textView.autoresizingMask = [.width, .height]
-        textView.font = NSFont.systemFont(ofSize: 16)
+        textView.font = NSFont.systemFont(ofSize: 16, weight: .light)
         textView.string = ""  // 初始時不顯示文字
         textView.isEditable = false
+        textView.textContainerInset = NSSize(width: 20, height: 20)
+        textView.alignment = .center
+        textView.backgroundColor = .clear
+        textView.textColor = .white
         scrollView.documentView = textView
         
         let rewriteButton = NSButton(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
         rewriteButton.title = "重寫文字"
         rewriteButton.bezelStyle = .rounded
-        rewriteButton.font = NSFont.boldSystemFont(ofSize: 16)
+        rewriteButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
         rewriteButton.target = self
         rewriteButton.action = #selector(rewriteText)
-        rewriteButton.isHidden = true  // 初始時隱藏重寫按鈕
+        rewriteButton.isHidden = true
+        styleButton(rewriteButton)
 
         let copyButton = NSButton(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
         copyButton.title = "複製文字"
         copyButton.bezelStyle = .rounded
-        copyButton.font = NSFont.boldSystemFont(ofSize: 16)
+        copyButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
         copyButton.target = self
         copyButton.action = #selector(copyRewrittenText)
-        copyButton.isHidden = true  // 初始時隱藏複製按鈕
+        copyButton.isHidden = true
+        styleButton(copyButton)
 
         let loadingLabel = NSTextField(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
         loadingLabel.stringValue = "AI 校正中..."
@@ -325,17 +359,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         loadingLabel.isBordered = false
         loadingLabel.backgroundColor = .clear
         loadingLabel.alignment = .center
-        loadingLabel.font = NSFont.boldSystemFont(ofSize: 16)
-        loadingLabel.textColor = .gray
+        loadingLabel.font = NSFont.systemFont(ofSize: 16, weight: .medium)
+        loadingLabel.textColor = NSColor(red: 0.4, green: 0.8, blue: 1.0, alpha: 1.0)
 
-        let progressIndicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 200, height: 20))
-        progressIndicator.style = .bar
-        progressIndicator.isIndeterminate = false
-        progressIndicator.minValue = 0
-        progressIndicator.maxValue = 100
-        progressIndicator.doubleValue = 0
-
-        let stackView = NSStackView(frame: (textWindow?.contentView?.bounds)!)
+        let stackView = NSStackView(frame: gradientView.bounds)
         stackView.orientation = .vertical
         stackView.spacing = 20
         stackView.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
@@ -343,20 +370,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         stackView.addArrangedSubview(loadingLabel)
         stackView.addArrangedSubview(rewriteButton)
         stackView.addArrangedSubview(copyButton)
-        stackView.addArrangedSubview(progressIndicator)
         
         stackView.setHuggingPriority(.defaultLow, for: .horizontal)
         stackView.setHuggingPriority(.defaultLow, for: .vertical)
         
+        gradientView.addSubview(stackView)
         textWindow?.contentView?.subviews.forEach { $0.removeFromSuperview() }
-        textWindow?.contentView?.addSubview(stackView)
+        textWindow?.contentView?.addSubview(gradientView)
         textWindow?.makeKeyAndOrderFront(nil)
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
         
         self.currentTextView = textView
         self.originalText = text
-        self.progressIndicator = progressIndicator
         self.rewriteButton = rewriteButton
         self.copyButton = copyButton
         self.loadingLabel = loadingLabel
@@ -385,7 +411,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.loadingLabel?.isHidden = false
                     self.rewriteButton?.isHidden = true
                     self.copyButton?.isHidden = true
-                    self.progressIndicator?.doubleValue = 5
                 }
                 print("調用 OpenAI API...")
                 
@@ -397,13 +422,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             await MainActor.run {
                                 self.apiReturnedText += rewrittenText
                                 self.updateStreamText(textView: textView, newText: rewrittenText)
-                                self.updateProgress()
                             }
                         }
                     }
                 }
                 
-                print("API 返回的文字長度：\(self.apiReturnedText.count)")
+                print("API 返回的文字��度：\(self.apiReturnedText.count)")
                 
                 // 在這裡添加一個小延遲，確保所有更新都已完成
                 try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
@@ -477,11 +501,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.copyButton?.title = "複製文字"
             }
         }
-    }
-
-    func updateProgress() {
-        let progress = Double(self.apiReturnedText.count) / Double(originalText.count) * 100
-        self.progressIndicator?.doubleValue = min(progress, 100)
     }
 
     func streamOpenAiApi(text: String, onUpdate: @escaping (String) -> Void) async throws {
@@ -650,6 +669,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         return diff
+    }
+
+    func styleButton(_ button: NSButton) {
+        button.wantsLayer = true
+        button.layer?.backgroundColor = NSColor(red: 0.2, green: 0.6, blue: 1.0, alpha: 1.0).cgColor
+        button.layer?.cornerRadius = 20
+        button.contentTintColor = .white
     }
 }
 
