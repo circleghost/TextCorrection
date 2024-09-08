@@ -14,6 +14,7 @@
 		478434322C8C38D700456192 /* TextCorrectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478434312C8C38D700456192 /* TextCorrectionTests.swift */; };
 		4784343C2C8C38D700456192 /* TextCorrectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784343B2C8C38D700456192 /* TextCorrectionUITests.swift */; };
 		4784343E2C8C38D700456192 /* TextCorrectionUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784343D2C8C38D700456192 /* TextCorrectionUITestsLaunchTests.swift */; };
+		47C086302C8CC27D00030313 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 47C0862F2C8CC27D00030313 /* HotKey */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47C086302C8CC27D00030313 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -145,6 +147,9 @@
 			dependencies = (
 			);
 			name = TextCorrection;
+			packageProductDependencies = (
+				47C0862F2C8CC27D00030313 /* HotKey */,
+			);
 			productName = TextCorrection;
 			productReference = 4784341C2C8C38D500456192 /* TextCorrection.app */;
 			productType = "com.apple.product-type.application";
@@ -217,6 +222,9 @@
 				Base,
 			);
 			mainGroup = 478434132C8C38D500456192;
+			packageReferences = (
+				47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */,
+			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -581,6 +589,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soffes/HotKey";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		47C0862F2C8CC27D00030313 /* HotKey */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */;
+			productName = HotKey;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 478434142C8C38D500456192 /* Project object */;
 }
