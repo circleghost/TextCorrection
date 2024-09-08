@@ -127,7 +127,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
     1. 中文與英文之間，中文與數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情況不需調整：
-       - 括���內的說明，例如（圖一）、（加入產品圖示）。
+       - 括弧內的說明，例如（圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
        - 英文不一定要翻成中文。
        - emoji 或特殊符號是為了增加閱讀體驗，也不必調整。
@@ -405,6 +405,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 print("API 返回的文字長度：\(self.apiReturnedText.count)")
                 
+                // 在這裡添加一個小延遲，確保所有更新都已完成
+                try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
+
                 // API 返回完整結果後，進行比較並呈現結果
                 await self.showComparisonResults(textView: textView)
                 
@@ -492,7 +495,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             model: "gpt-4o-mini",
             messages: [
                 OpenAIRequest.Message(role: "system", content: systemPrompt),
-                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改掉錯字。\n\n<text>\n\(text)\n</text>")
+                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改掉錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
             ],
             temperature: 0.7,
             maxTokens: 1000,
@@ -539,6 +542,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        
+        // 在這裡添加一個最終的更新，確保使用完整的內容
+        onUpdate("\n")  // 添加一個換行符來觸發最後一次更新
         
         print("成功獲取重寫後的文字，總長度：\(fullContent.count)")
     }
