@@ -72,7 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isRewriting = false
     private var originalText: String = ""
     
-    // 新增顏色常量
+    // 新增顏色常
     let addedTextColor = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 1.0) // 深綠色
     let deletedTextColor = NSColor(red: 0.8, green: 0.0, blue: 0.0, alpha: 1.0) // 深紅色
     
@@ -154,7 +154,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.messageText = "要輔助功能權限"
                 alert.informativeText = "請在系統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
                 alert.addButton(withTitle: "打開系統偏好設置")
-                alert.addButton(withTitle: "取消")
+                alert.addButton(withTitle: "消")
                 
                 if alert.runModal() == .alertFirstButtonReturn {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
@@ -248,12 +248,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func copyAndRewriteSelectedText() {
-        if let selectedText = getSelectedText() {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(selectedText, forType: .string)
-            showTextWindow(text: selectedText)
-        } else {
-            print("無法獲取選中的文字")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            if let selectedText = self?.getSelectedText() {
+                DispatchQueue.main.async {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(selectedText, forType: .string)
+                    self?.showTextWindow(text: selectedText)
+                }
+            } else {
+                print("無法獲取選中的文字")
+            }
         }
     }
 
@@ -261,24 +265,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let pasteboard = NSPasteboard.general
         let oldContents = pasteboard.string(forType: .string)
         
-        let keyCode = UInt16(8) // 'C' key
         let source = CGEventSource(stateID: .hidSystemState)
         
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        let cDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)
+        let cUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
         
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
+        cmdDown?.flags = .maskCommand
+        cDown?.flags = .maskCommand
+        cUp?.flags = .maskCommand
+        cmdUp?.flags = .maskCommand
         
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
+        cmdDown?.post(tap: .cghidEventTap)
+        cDown?.post(tap: .cghidEventTap)
+        cUp?.post(tap: .cghidEventTap)
+        cmdUp?.post(tap: .cghidEventTap)
         
-        // 給系統一些時間來處理複製操作
         Thread.sleep(forTimeInterval: 0.1)
         
         let newContents = pasteboard.string(forType: .string)
         
-        return newContents != oldContents ? newContents : nil
+        if newContents != oldContents {
+            return newContents
+        }
+        
+        print("無法獲取選中的文字")
+        return nil
     }
 
     func showTextWindow(text: String) {
@@ -298,41 +311,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
         if textWindow == nil {
-            textWindow = NSWindow(contentRect: adjustedFrame,
+            textWindow = NSPanel(contentRect: adjustedFrame,
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
             textWindow?.title = "AI 文字校正"
             textWindow?.titlebarAppearsTransparent = true
             textWindow?.isMovableByWindowBackground = true
-            textWindow?.backgroundColor = NSColor(red: 0.1, green: 0.1, blue: 0.15, alpha: 1.0)
+            textWindow?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.9)
             textWindow?.minSize = NSSize(width: 400, height: 300)
+            textWindow?.isOpaque = false
+            textWindow?.hasShadow = true
+            textWindow?.appearance = NSAppearance(named: .darkAqua)
         } else {
             textWindow?.setFrame(adjustedFrame, display: true)
         }
         
-        // 創建漸變背景
-        let gradientView = NSVisualEffectView(frame: (textWindow?.contentView?.bounds)!)
-        gradientView.material = .windowBackground  // 使用語義材質
-        gradientView.state = .active
-        gradientView.blendingMode = .behindWindow
+        let visualEffectView = NSVisualEffectView(frame: (textWindow?.contentView?.bounds)!)
+        visualEffectView.material = .windowBackground  // 使用語義材質
+        visualEffectView.state = .active
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.appearance = NSAppearance(named: .darkAqua)
         
-        // 設置外觀為深色模式
-        gradientView.appearance = NSAppearance(named: .darkAqua)
-        
-        let scrollView = NSScrollView(frame: gradientView.bounds)
+        let scrollView = NSScrollView(frame: visualEffectView.bounds)
         scrollView.hasVerticalScroller = true
         scrollView.autoresizingMask = [.width, .height]
         scrollView.drawsBackground = false
         
         let textView = NSTextView(frame: scrollView.bounds)
         textView.autoresizingMask = [.width, .height]
-        textView.font = NSFont.systemFont(ofSize: 16, weight: .light)
-        textView.string = ""  // 初始時不顯示文字
+        textView.font = NSFont.systemFont(ofSize: 14)
+        textView.string = ""
         textView.isEditable = false
         textView.textContainerInset = NSSize(width: 20, height: 20)
-        textView.alignment = .center
         textView.backgroundColor = .clear
         textView.textColor = .white
+        textView.alignment = .center
         scrollView.documentView = textView
         
         let rewriteButton = NSButton(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
@@ -362,7 +375,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         loadingLabel.font = NSFont.systemFont(ofSize: 16, weight: .medium)
         loadingLabel.textColor = NSColor(red: 0.4, green: 0.8, blue: 1.0, alpha: 1.0)
 
-        let stackView = NSStackView(frame: gradientView.bounds)
+        let stackView = NSStackView(frame: visualEffectView.bounds)
         stackView.orientation = .vertical
         stackView.spacing = 20
         stackView.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
@@ -371,12 +384,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         stackView.addArrangedSubview(rewriteButton)
         stackView.addArrangedSubview(copyButton)
         
-        stackView.setHuggingPriority(.defaultLow, for: .horizontal)
-        stackView.setHuggingPriority(.defaultLow, for: .vertical)
-        
-        gradientView.addSubview(stackView)
+        visualEffectView.addSubview(stackView)
         textWindow?.contentView?.subviews.forEach { $0.removeFromSuperview() }
-        textWindow?.contentView?.addSubview(gradientView)
+        textWindow?.contentView?.addSubview(visualEffectView)
         textWindow?.makeKeyAndOrderFront(nil)
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
@@ -427,7 +437,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 
-                print("API 返回的文字��度：\(self.apiReturnedText.count)")
+                print("API 返回的文字度：\(self.apiReturnedText.count)")
                 
                 // 在這裡添加一個小延遲，確保所有更新都已完成
                 try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
@@ -468,7 +478,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !apiReturnedText.isEmpty else {
             print("錯誤：API 返回的文字為空")
             await MainActor.run {
-                textView.string = "錯誤：API 未返回任何文字"
+                textView.string = "錯誤：API 未返回何文字"
             }
             return
         }
@@ -600,7 +610,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paragraphStyle.lineSpacing = 5 // 增加行間距
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 16),
+            .font: NSFont.systemFont(ofSize: 14),
+            .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle
         ]
         
@@ -612,14 +623,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 attributedString.append(NSAttributedString(string: text, attributes: baseAttributes))
             case .insert(let text):
                 var attributes = baseAttributes
-                attributes[.foregroundColor] = addedTextColor
-                attributes[.backgroundColor] = addedTextColor.withAlphaComponent(0.1)
+                attributes[.backgroundColor] = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 0.3)
                 attributedString.append(NSAttributedString(string: text, attributes: attributes))
             case .delete(let text):
                 var attributes = baseAttributes
-                attributes[.foregroundColor] = deletedTextColor
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
-                attributes[.backgroundColor] = deletedTextColor.withAlphaComponent(0.1)
+                attributes[.strikethroughColor] = NSColor.red
+                attributes[.backgroundColor] = NSColor(red: 0.5, green: 0.0, blue: 0.0, alpha: 0.3)
                 attributedString.append(NSAttributedString(string: text, attributes: attributes))
             }
         }
@@ -676,6 +686,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         button.layer?.backgroundColor = NSColor(red: 0.2, green: 0.6, blue: 1.0, alpha: 1.0).cgColor
         button.layer?.cornerRadius = 20
         button.contentTintColor = .white
+        button.shadow = NSShadow()
+        button.shadow?.shadowColor = NSColor.black.withAlphaComponent(0.3)
+        button.shadow?.shadowOffset = NSSize(width: 0, height: 2)
+        button.shadow?.shadowBlurRadius = 4
     }
 }
 
