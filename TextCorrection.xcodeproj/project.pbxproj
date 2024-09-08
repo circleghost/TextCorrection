@@ -15,6 +15,9 @@
 		4784343C2C8C38D700456192 /* TextCorrectionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784343B2C8C38D700456192 /* TextCorrectionUITests.swift */; };
 		4784343E2C8C38D700456192 /* TextCorrectionUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784343D2C8C38D700456192 /* TextCorrectionUITestsLaunchTests.swift */; };
 		47C086302C8CC27D00030313 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 47C0862F2C8CC27D00030313 /* HotKey */; };
+		47C086332C8DB15700030313 /* DifferenceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47C086322C8DB15700030313 /* DifferenceKit */; };
+		47C086352C8DB1D800030313 /* DifferenceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47C086342C8DB1D800030313 /* DifferenceKit */; };
+		47C086372C8DB1EF00030313 /* DifferenceKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47C086362C8DB1EF00030313 /* DifferenceKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47C086332C8DB15700030313 /* DifferenceKit in Frameworks */,
 				47C086302C8CC27D00030313 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -61,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47C086352C8DB1D800030313 /* DifferenceKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +73,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47C086372C8DB1EF00030313 /* DifferenceKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -149,6 +155,7 @@
 			name = TextCorrection;
 			packageProductDependencies = (
 				47C0862F2C8CC27D00030313 /* HotKey */,
+				47C086322C8DB15700030313 /* DifferenceKit */,
 			);
 			productName = TextCorrection;
 			productReference = 4784341C2C8C38D500456192 /* TextCorrection.app */;
@@ -168,6 +175,9 @@
 				4784342F2C8C38D700456192 /* PBXTargetDependency */,
 			);
 			name = TextCorrectionTests;
+			packageProductDependencies = (
+				47C086342C8DB1D800030313 /* DifferenceKit */,
+			);
 			productName = TextCorrectionTests;
 			productReference = 4784342D2C8C38D700456192 /* TextCorrectionTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -186,6 +196,9 @@
 				478434392C8C38D700456192 /* PBXTargetDependency */,
 			);
 			name = TextCorrectionUITests;
+			packageProductDependencies = (
+				47C086362C8DB1EF00030313 /* DifferenceKit */,
+			);
 			productName = TextCorrectionUITests;
 			productReference = 478434372C8C38D700456192 /* TextCorrectionUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -224,6 +237,7 @@
 			mainGroup = 478434132C8C38D500456192;
 			packageReferences = (
 				47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */,
+				47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */,
 			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
@@ -599,6 +613,14 @@
 				kind = branch;
 			};
 		};
+		47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ra1028/DifferenceKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -606,6 +628,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */;
 			productName = HotKey;
+		};
+		47C086322C8DB15700030313 /* DifferenceKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */;
+			productName = DifferenceKit;
+		};
+		47C086342C8DB1D800030313 /* DifferenceKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */;
+			productName = DifferenceKit;
+		};
+		47C086362C8DB1EF00030313 /* DifferenceKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */;
+			productName = DifferenceKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
