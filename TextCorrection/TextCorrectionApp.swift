@@ -501,8 +501,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor),
             textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
-            textContainer.bottomAnchor.constraint(equalTo: statsView.topAnchor, constant: -10),
-            textContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 100), // 添加最小高度約束
+            // 移除 textContainer 的底部約束，讓它可以自由調整高度
 
             scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
@@ -518,6 +517,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
             statsView.heightAnchor.constraint(equalToConstant: 20),
+            statsView.bottomAnchor.constraint(lessThanOrEqualTo: bottomArea.topAnchor, constant: -10),
 
             bottomArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             bottomArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
@@ -597,17 +597,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentSize = textView.layoutManager?.usedRect(for: textView.textContainer!).size ?? .zero
         let newHeight = max(contentSize.height + 30, 100) // 設置最小高度為 100
 
-        textView.frame.size.height = newHeight
+        textView.frame.size.height = contentSize.height
         
         if let scrollView = textView.enclosingScrollView {
-            scrollView.documentView?.frame.size = CGSize(width: contentSize.width, height: newHeight)
+            scrollView.documentView?.frame.size = CGSize(width: contentSize.width, height: contentSize.height)
         }
 
         // 更新 textContainer 的高度約束
         if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
             heightConstraint.constant = newHeight
         } else {
-            textContainer.heightAnchor.constraint(equalToConstant: newHeight).isActive = true
+            let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
+            heightConstraint.priority = .defaultHigh // 設置較高的優先級，但不是必須的
+            heightConstraint.isActive = true
         }
 
         mainArea.layoutSubtreeIfNeeded()
