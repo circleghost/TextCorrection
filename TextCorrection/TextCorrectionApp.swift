@@ -144,9 +144,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    let customFont: NSFont
+
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
-    1. 中文與英文之間，中字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
+    1. 中文與英文之間，中數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
@@ -157,6 +159,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     5. 請仔細審視給定的文字，將冗詞語法錯誤進行修改。
     6. 返回文字不要帶有 <text> 標籤。
     """
+
+    override init() {
+        self.customFont = NSFont(name: "Yuanti TC", size: 19) ?? NSFont.systemFont(ofSize: 19)
+        super.init()
+    }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         requestAccessibilityPermission()
@@ -176,7 +183,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
                 alert.informativeText = "請在統好設 TextCorrection 功能權限，便應用程序能夠正常工作。"
-                alert.addButton(withTitle: "打開統偏好設置")
+                alert.addButton(withTitle: "打開統好設置")
                 alert.addButton(withTitle: "消")
                 
                 if alert.runModal() == .alertFirstButtonReturn {
@@ -274,7 +281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
-                    // 重置舊的狀態
+                    // 重舊的狀態
                     self?.resetState()
                     
                     NSPasteboard.general.clearContents()
@@ -330,13 +337,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 60%
-        let width = screenFrame.width * 0.6
-        let height = screenFrame.height * 0.6
+        // 設定視窗大小為螢幕的 50%
+        let width = screenFrame.width * 0.5
+        let height = screenFrame.height * 0.5
         let size = NSSize(width: width, height: height)
         
-        let mouseLocation = NSEvent.mouseLocation
-        let windowFrame = NSRect(origin: mouseLocation, size: size)
+        // 計算視窗位置，使其位於畫面正中央
+        let origin = NSPoint(
+            x: screenFrame.midX - width / 2,
+            y: screenFrame.midY - height / 2
+        )
+        let windowFrame = NSRect(origin: origin, size: size)
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
         if textWindow == nil {
@@ -362,7 +373,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow?.appearance = NSAppearance(named: .darkAqua)
             
             // 設置標題字體和大小
-            if let titleFont = NSFont(name: "仓耳今楷01-W05", size: 18) {
+            if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
                 textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
                 textWindow?.title = "AI 文字檢查"
                 textWindow?.titleVisibility = .visible
@@ -427,7 +438,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let textView = NSTextView(frame: scrollView.bounds)
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.font = NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24)
         textView.string = ""
         textView.isEditable = false
         textView.textContainerInset = NSSize(width: 15, height: 15)  // 增加內邊距
@@ -569,6 +579,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textView.frame = scrollView.bounds
         scrollView.documentView = textView
 
+        // 驗證字體加載
+        for family in NSFontManager.shared.availableFontFamilies {
+            print("Font family: \(family)")
+            for font in NSFontManager.shared.availableMembers(ofFontFamily: family) ?? [] {
+                print("  - \(font[0])")
+            }
+        }
+
+        // 設置字體
+        textView.font = self.customFont
+        print("成功設置自定義字體：\(self.customFont.fontName)")
+
         rewriteText()  // 自動開始重寫
     }
 
@@ -616,6 +638,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 打印調試信息
         print("Adjusted heights - textView: \(textView.frame.height), textContainer: \(textContainer.frame.height), mainArea: \(mainArea.frame.height)")
+
+        // 確保字體正確應用
+        textView.font = self.customFont
+        print("當前應用的字體：\(textView.font?.fontName ?? "Unknown")")
     }
 
     @objc func rewriteText() {
@@ -678,8 +704,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func updateStreamText(textView: NSTextView, newText: String) {
         let trimmedText = trimExtraWhitespace(newText)
         let attributedString = NSAttributedString(string: trimmedText, attributes: [
-            .font: NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24),
-            .foregroundColor: NSColor.white
+            .font: self.customFont,
+            .foregroundColor: NSColor.white,
+            .kern: 1.0  // 增加字距
         ])
         textView.textStorage?.append(attributedString)
         textView.scrollToEndOfDocument(nil)
@@ -833,9 +860,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paragraphStyle.lineSpacing = 8  // 增加行間距
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24),
+            .font: self.customFont,
             .foregroundColor: NSColor.white,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
+            .kern: 1.0  // 增加字距
         ]
         
         let diff = diffStrings(original, rewritten)
