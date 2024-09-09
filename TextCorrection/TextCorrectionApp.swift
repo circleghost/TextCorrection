@@ -147,7 +147,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let customFont: NSFont
 
     private let systemPrompt = """
-    你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
+    你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別��意以下規則：
     1. 中文與英文之間，中數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
@@ -178,7 +178,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
         
         if !accessibilityEnabled {
-            print("請在統偏好設置中啟用助功權限")
+            print("請在統偏好設置中啟用助功權���")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
@@ -281,7 +281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
-                    // 重舊的狀態
+                    // 重舊的��態
                     self?.resetState()
                     
                     NSPasteboard.general.clearContents()
@@ -334,10 +334,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
+    func resetWindowState() {
+        textWindow?.close()
+        textWindow = nil
+        currentTextView = nil
+        copyButton = nil
+        statsView = nil
+        apiReturnedText = ""
+        originalText = ""
+    }
+
     func showTextWindow(text: String) {
+        resetWindowState()
+        
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 50% 寬度和 40% 高度
+        // 設定視窗大小為螢幕的 50% 寬度和 25% 高度
         let width = screenFrame.width * 0.5
         let height = screenFrame.height * 0.25
         let size = NSSize(width: width, height: height)
@@ -350,62 +362,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let windowFrame = NSRect(origin: origin, size: size)
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
-        if textWindow == nil {
-            textWindow = NSPanel(contentRect: adjustedFrame,
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                                  backing: .buffered, defer: false)
+        textWindow = NSPanel(contentRect: adjustedFrame,
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                             backing: .buffered, defer: false)
+        textWindow?.title = "AI 潤飾"
+        textWindow?.titlebarAppearsTransparent = false
+        textWindow?.isMovableByWindowBackground = true
+        
+        // 添加霧化效果
+        let visualEffect = NSVisualEffectView(frame: adjustedFrame)
+        visualEffect.material = .windowBackground
+        visualEffect.state = .active
+        visualEffect.blendingMode = .behindWindow
+        
+        textWindow?.contentView = visualEffect
+        textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.6) ?? .black.withAlphaComponent(0.6)
+        
+        textWindow?.minSize = NSSize(width: 400, height: 250)
+        textWindow?.isOpaque = false
+        textWindow?.hasShadow = true
+        textWindow?.appearance = NSAppearance(named: .darkAqua)
+        
+        // 設置標題字體和大小
+        if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
+            textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
             textWindow?.title = "AI 潤飾"
+            textWindow?.titleVisibility = .visible
             textWindow?.titlebarAppearsTransparent = false
-            textWindow?.isMovableByWindowBackground = true
+            textWindow?.styleMask.insert(.titled)
+            textWindow?.standardWindowButton(.closeButton)?.superview?.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
             
-            // 添加霧化效果
-            let visualEffect = NSVisualEffectView(frame: adjustedFrame)
-            visualEffect.material = .windowBackground
-            visualEffect.state = .active
-            visualEffect.blendingMode = .behindWindow
-            
-            textWindow?.contentView = visualEffect
-            textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.6) ?? .black.withAlphaComponent(0.6)
-            
-            textWindow?.minSize = NSSize(width: 400, height: 250)
-            textWindow?.isOpaque = false
-            textWindow?.hasShadow = true
-            textWindow?.appearance = NSAppearance(named: .darkAqua)
-            
-            // 設置標題字體和大小
-            if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
-                textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
-                textWindow?.title = "AI 潤飾"
-                textWindow?.titleVisibility = .visible
-                textWindow?.titlebarAppearsTransparent = false
-                textWindow?.styleMask.insert(.titled)
-                textWindow?.standardWindowButton(.closeButton)?.superview?.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
+            if let titleView = textWindow?.standardWindowButton(.closeButton)?.superview {
+                titleView.wantsLayer = true
+                titleView.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
                 
-                if let titleView = textWindow?.standardWindowButton(.closeButton)?.superview {
-                    titleView.wantsLayer = true
-                    titleView.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
-                    
-                    let titleLabel = NSTextField(frame: NSRect(x: 0, y: 0, width: titleView.frame.width, height: titleView.frame.height))
-                    titleLabel.stringValue = "AI 潤飾"
-                    titleLabel.alignment = .center
-                    titleLabel.font = titleFont
-                    titleLabel.textColor = .white
-                    titleLabel.isBezeled = false
-                    titleLabel.isEditable = false
-                    titleLabel.drawsBackground = false
-                    titleView.addSubview(titleLabel)
-                    
-                    titleLabel.translatesAutoresizingMaskIntoConstraints = false
-                    NSLayoutConstraint.activate([
-                        titleLabel.centerXAnchor.constraint(equalTo: titleView.centerXAnchor),
-                        titleLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
-                        titleLabel.widthAnchor.constraint(equalTo: titleView.widthAnchor),
-                        titleLabel.heightAnchor.constraint(equalTo: titleView.heightAnchor)
-                    ])
-                }
+                let titleLabel = NSTextField(frame: NSRect(x: 0, y: 0, width: titleView.frame.width, height: titleView.frame.height))
+                titleLabel.stringValue = "AI 潤飾"
+                titleLabel.alignment = .center
+                titleLabel.font = titleFont
+                titleLabel.textColor = .white
+                titleLabel.isBezeled = false
+                titleLabel.isEditable = false
+                titleLabel.drawsBackground = false
+                titleView.addSubview(titleLabel)
+                
+                titleLabel.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    titleLabel.centerXAnchor.constraint(equalTo: titleView.centerXAnchor),
+                    titleLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
+                    titleLabel.widthAnchor.constraint(equalTo: titleView.widthAnchor),
+                    titleLabel.heightAnchor.constraint(equalTo: titleView.heightAnchor)
+                ])
             }
-        } else {
-            textWindow?.setFrame(adjustedFrame, display: true)
         }
         
         let contentView = NSView(frame: (textWindow?.contentView?.bounds)!)
@@ -550,9 +558,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
         
-        // 重置文視圖
-        textView.string = ""
-        
         self.currentTextView = textView
         self.originalText = text
         self.copyButton = copyButton
@@ -574,7 +579,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 設置字體
         textView.font = self.customFont
 
-        rewriteText()  // 自動開始重寫
+        // 開始重寫
+        self.rewriteText()
     }
 
     @objc func windowDidResize(_ notification: Notification) {
