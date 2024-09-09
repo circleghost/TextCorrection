@@ -143,7 +143,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
     1. 中文與英文之間，中文數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
-    2. 以下情況需調整：
+    2. 以下情況調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
        - 英文不一定要翻成中文。
@@ -316,9 +316,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 增加視窗大小
-        let width = min(max(600, CGFloat(text.count) * 8), screenFrame.width * 0.9)
-        let height = min(max(400, CGFloat(text.count) * 0.5), screenFrame.height * 0.9)
+        // 設定視窗大小為螢幕的 70%
+        let width = screenFrame.width * 0.7
+        let height = screenFrame.height * 0.7
         let size = NSSize(width: width, height: height)
         
         let mouseLocation = NSEvent.mouseLocation
@@ -329,11 +329,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow = NSPanel(contentRect: adjustedFrame,
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
-            textWindow?.title = "AI 文字校正"
+            textWindow?.title = "AI 文字正"
             textWindow?.titlebarAppearsTransparent = true
             textWindow?.isMovableByWindowBackground = true
             textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.8) ?? .black.withAlphaComponent(0.8)
-            textWindow?.minSize = NSSize(width: 600, height: 400)
+            textWindow?.minSize = NSSize(width: 400, height: 300)
             textWindow?.isOpaque = false
             textWindow?.hasShadow = true
             textWindow?.appearance = NSAppearance(named: .darkAqua)
@@ -342,55 +342,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let contentView = NSView(frame: (textWindow?.contentView?.bounds)!)
-        
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        textWindow?.contentView?.addSubview(contentView)
+
         // 主要區域
-        let mainArea = NSView(frame: NSRect(x: 0, y: 50, width: contentView.bounds.width, height: contentView.bounds.height - 50))
-        mainArea.wantsLayer = true
-        mainArea.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
-        
+        let mainArea = NSView()
+        mainArea.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(mainArea)
+
         // 文字區域（圓角）
-        let textContainer = NSView(frame: NSRect(x: 20, y: 60, width: mainArea.bounds.width - 40, height: mainArea.bounds.height - 100))
+        let textContainer = NSView()
+        textContainer.translatesAutoresizingMaskIntoConstraints = false
         textContainer.wantsLayer = true
         textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.cgColor
         textContainer.layer?.cornerRadius = 10
-        
-        let scrollView = NSScrollView(frame: textContainer.bounds.insetBy(dx: 10, dy: 10))
+        mainArea.addSubview(textContainer)
+
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
-        scrollView.autoresizingMask = [.width, .height]
         scrollView.drawsBackground = false
-        
+        textContainer.addSubview(scrollView)
+
         let textView = NSTextView(frame: scrollView.bounds)
-        textView.autoresizingMask = [.width, .height]
-        textView.font = NSFont.systemFont(ofSize: 16)
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.font = NSFont.systemFont(ofSize: 20)
         textView.string = ""
         textView.isEditable = false
-        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.textContainerInset = NSSize(width: 10, height: 10)
         textView.backgroundColor = NSColor.clear
         textView.textColor = NSColor.white
         textView.alignment = .left
         scrollView.documentView = textView
-        
-        textContainer.addSubview(scrollView)
-        
+
         // 統計信息
-        let statsView = NSTextField(frame: NSRect(x: 30, y: 20, width: mainArea.bounds.width - 60, height: 20))
+        let statsView = NSTextField()
+        statsView.translatesAutoresizingMaskIntoConstraints = false
         statsView.isEditable = false
         statsView.isBordered = false
         statsView.backgroundColor = .clear
         statsView.textColor = NSColor(hexString: "#727178") ?? .lightGray
         statsView.font = NSFont.systemFont(ofSize: 12)
         statsView.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
-        
-        mainArea.addSubview(textContainer)
         mainArea.addSubview(statsView)
-        
+
         // 底部區域
-        let bottomArea = NSView(frame: NSRect(x: 0, y: 0, width: contentView.bounds.width, height: 50))
+        let bottomArea = NSView()
+        bottomArea.translatesAutoresizingMaskIntoConstraints = false
         bottomArea.wantsLayer = true
         bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.cgColor
-        
+        contentView.addSubview(bottomArea)
+
         // 複製按鈕
-        let copyButton = NSButton(frame: NSRect(x: bottomArea.bounds.width - 180, y: 10, width: 150, height: 30))
+        let copyButton = NSButton()
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
         copyButton.title = "複製並貼上"
         copyButton.bezelStyle = .inline
         copyButton.isBordered = false
@@ -398,14 +403,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         copyButton.target = self
         copyButton.action = #selector(copyRewrittenText)
         copyButton.contentTintColor = .white
-        
+        bottomArea.addSubview(copyButton)
+
         // Enter 符號
-        let enterSymbolContainer = NSView(frame: NSRect(x: copyButton.frame.maxX, y: 10, width: 30, height: 30))
+        let enterSymbolContainer = NSView()
+        enterSymbolContainer.translatesAutoresizingMaskIntoConstraints = false
         enterSymbolContainer.wantsLayer = true
         enterSymbolContainer.layer?.backgroundColor = NSColor(hexString: "#3B3A42")?.cgColor
         enterSymbolContainer.layer?.cornerRadius = 5
-        
-        let enterSymbol = NSTextField(frame: NSRect(x: 0, y: 0, width: 30, height: 30))
+        bottomArea.addSubview(enterSymbolContainer)
+
+        let enterSymbol = NSTextField()
+        enterSymbol.translatesAutoresizingMaskIntoConstraints = false
         enterSymbol.isEditable = false
         enterSymbol.isBordered = false
         enterSymbol.backgroundColor = .clear
@@ -413,17 +422,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         enterSymbol.font = NSFont.systemFont(ofSize: 16)
         enterSymbol.stringValue = "⏎"
         enterSymbol.alignment = .center
-        
         enterSymbolContainer.addSubview(enterSymbol)
+
+        // 設置約束
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: textWindow!.contentView!.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: textWindow!.contentView!.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: textWindow!.contentView!.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: textWindow!.contentView!.bottomAnchor),
+
+            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor),
+            mainArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            mainArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            mainArea.bottomAnchor.constraint(equalTo: bottomArea.topAnchor),
+
+            textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor, constant: 20),
+            textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
+            textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
+            textContainer.bottomAnchor.constraint(equalTo: statsView.topAnchor, constant: -20),
+
+            scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: textContainer.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
+
+            textView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            textView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            textView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+
+            statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
+            statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
+            statsView.bottomAnchor.constraint(equalTo: mainArea.bottomAnchor, constant: -10),
+            statsView.heightAnchor.constraint(equalToConstant: 20),
+
+            bottomArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            bottomArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            bottomArea.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            bottomArea.heightAnchor.constraint(equalToConstant: 50),
+
+            copyButton.trailingAnchor.constraint(equalTo: enterSymbolContainer.leadingAnchor, constant: -10),
+            copyButton.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
+
+            enterSymbolContainer.trailingAnchor.constraint(equalTo: bottomArea.trailingAnchor, constant: -20),
+            enterSymbolContainer.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
+            enterSymbolContainer.widthAnchor.constraint(equalToConstant: 30),
+            enterSymbolContainer.heightAnchor.constraint(equalToConstant: 30),
+
+            enterSymbol.centerXAnchor.constraint(equalTo: enterSymbolContainer.centerXAnchor),
+            enterSymbol.centerYAnchor.constraint(equalTo: enterSymbolContainer.centerYAnchor)
+        ])
         
-        bottomArea.addSubview(copyButton)
-        bottomArea.addSubview(enterSymbolContainer)
-        
-        contentView.addSubview(mainArea)
-        contentView.addSubview(bottomArea)
-        
-        textWindow?.contentView?.subviews.forEach { $0.removeFromSuperview() }
-        textWindow?.contentView?.addSubview(contentView)
         textWindow?.makeKeyAndOrderFront(nil)
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
@@ -433,7 +482,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.copyButton = copyButton
         self.statsView = statsView
         
+        // 設置文字變化監聽器
+        NotificationCenter.default.addObserver(self, selector: #selector(textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
+        
+        // 初始調整文字框大小
+        self.adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
+
         rewriteText()  // 自動開始重寫
+    }
+
+    @objc func textDidChange(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView,
+              let textContainer = textView.superview?.superview,
+              let mainArea = textContainer.superview else {
+            return
+        }
+
+        adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
+    }
+
+    func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
+        let font = NSFont.systemFont(ofSize: 20)
+        let lineHeight = font.pointSize * 1.2
+        let minTextContainerHeight = lineHeight * 2
+        let maxTextContainerHeight = mainArea.bounds.height - 100
+
+        // 使用 layoutManager 來獲取文本的實際高度
+        let contentHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
+        let newHeight = min(max(contentHeight + 40, minTextContainerHeight), maxTextContainerHeight)
+
+        let oldFrame = textContainer.frame
+        let newFrame = NSRect(x: oldFrame.minX, y: mainArea.bounds.height - newHeight - 20, width: oldFrame.width, height: newHeight)
+
+        textContainer.frame = newFrame
+
+        // 調整統計信息的位置
+        if let statsView = self.statsView {
+            statsView.frame = NSRect(x: statsView.frame.minX, y: newFrame.minY - 30, width: statsView.frame.width, height: statsView.frame.height)
+        }
+
+        // 如果需要，調整視窗大小
+        if newHeight == maxTextContainerHeight {
+            let currentSize = textWindow?.frame.size ?? .zero
+            let newSize = NSSize(width: currentSize.width, height: currentSize.height + (newHeight - oldFrame.height))
+            textWindow?.setFrame(NSRect(origin: textWindow?.frame.origin ?? .zero, size: newSize), display: true, animate: true)
+        }
     }
 
     @objc func rewriteText() {
@@ -584,7 +677,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             throw TextCorrectionError.apiError(statusCode: httpResponse.statusCode)
         }
         
-        print("開始解析流式響應...")
+        print("開始解析式響應...")
         var fullContent = ""
         for try await line in bytes.lines {
             if line.hasPrefix("data: "), let data = line.dropFirst(6).data(using: .utf8) {
