@@ -316,9 +316,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 70%
-        let width = screenFrame.width * 0.7
-        let height = screenFrame.height * 0.7
+        // 設定視窗大小為螢幕的 60%
+        let width = screenFrame.width * 0.6
+        let height = screenFrame.height * 0.6
         let size = NSSize(width: width, height: height)
         
         let mouseLocation = NSEvent.mouseLocation
@@ -366,10 +366,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let textView = NSTextView(frame: scrollView.bounds)
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.font = NSFont.systemFont(ofSize: 20)
+        textView.font = NSFont.systemFont(ofSize: 28)  // 增大字體大小到28
         textView.string = ""
         textView.isEditable = false
-        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.textContainerInset = NSSize(width: 15, height: 15)  // 增加內邊距
         textView.backgroundColor = NSColor.clear
         textView.textColor = NSColor.white
         textView.alignment = .left
@@ -440,6 +440,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
             textContainer.bottomAnchor.constraint(equalTo: statsView.topAnchor, constant: -20),
+            textContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 150),  // 增加最小高度
 
             scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
@@ -502,7 +503,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
-        let font = NSFont.systemFont(ofSize: 20)
+        let font = NSFont.systemFont(ofSize: 28)
         let lineHeight = font.pointSize * 1.2
         let minTextContainerHeight = lineHeight * 2
         let maxTextContainerHeight = mainArea.bounds.height - 100
@@ -548,7 +549,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 print("調用 OpenAI API...")
                 
-                self.apiReturnedText = ""  // 重置 API 返回的文字
+                self.apiReturnedText = ""  // 重置 API 返���的文字
                 
                 try await withTimeout(seconds: 30) {
                     try await self.streamOpenAiApi(text: self.originalText) { rewrittenText in
@@ -586,8 +587,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func updateStreamText(textView: NSTextView, newText: String) {
         let attributedString = NSAttributedString(string: newText, attributes: [
-            .font: NSFont.systemFont(ofSize: 16),
-            .foregroundColor: NSColor.textColor
+            .font: NSFont.systemFont(ofSize: 28),  // 增大字體大小到28
+            .foregroundColor: NSColor.white
         ])
         textView.textStorage?.append(attributedString)
         textView.scrollToEndOfDocument(nil)
@@ -726,10 +727,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let attributedString = NSMutableAttributedString()
         
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 5 // 增加行間距
+        paragraphStyle.lineSpacing = 8  // 增加行間距
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 14),
+            .font: NSFont.systemFont(ofSize: 28),  // 增大字體大小到28
             .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle
         ]
