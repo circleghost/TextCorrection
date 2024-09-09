@@ -171,7 +171,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
         
         if !accessibilityEnabled {
-            print("請在��統偏好設置中啟用���助功權限")
+            print("請在統偏好設置中啟用助功權限")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
@@ -330,9 +330,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 70%
-        let width = screenFrame.width * 0.7
-        let height = screenFrame.height * 0.7
+        // 設定視窗大小為螢幕的 60%
+        let width = screenFrame.width * 0.6
+        let height = screenFrame.height * 0.6
         let size = NSSize(width: width, height: height)
         
         let mouseLocation = NSEvent.mouseLocation
@@ -346,7 +346,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow?.title = "AI 文字檢查"
             textWindow?.titlebarAppearsTransparent = false
             textWindow?.isMovableByWindowBackground = true
-            textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.8) ?? .black.withAlphaComponent(0.8)
+            
+            // 添加霧化效果
+            let visualEffect = NSVisualEffectView(frame: adjustedFrame)
+            visualEffect.material = .windowBackground
+            visualEffect.state = .active
+            visualEffect.blendingMode = .behindWindow
+            
+            textWindow?.contentView = visualEffect
+            textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.6) ?? .black.withAlphaComponent(0.6)
+            
             textWindow?.minSize = NSSize(width: 400, height: 300)
             textWindow?.isOpaque = false
             textWindow?.hasShadow = true
@@ -415,7 +424,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let textView = NSTextView(frame: scrollView.bounds)
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.font = NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28)
+        textView.font = NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24)
         textView.string = ""
         textView.isEditable = false
         textView.textContainerInset = NSSize(width: 15, height: 15)  // 增加內邊距
@@ -433,6 +442,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statsView.textColor = NSColor(hexString: "#727178") ?? .lightGray
         statsView.font = NSFont.systemFont(ofSize: 12)
         statsView.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
+        statsView.lineBreakMode = .byTruncatingTail
         mainArea.addSubview(statsView)
 
         // 底部區域
@@ -498,6 +508,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
             textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor, constant: 10),
             textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor, constant: -10),
+            textView.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
 
             statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
@@ -567,7 +578,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
-        let font = NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28)
+        let font = NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24)
         let lineHeight = font.pointSize * 1.2
         let minTextContainerHeight = lineHeight * 2
         let maxTextContainerHeight = mainArea.bounds.height - 80 // 留出一些空間給 statsView
@@ -658,7 +669,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func updateStreamText(textView: NSTextView, newText: String) {
         let trimmedText = trimExtraWhitespace(newText)
         let attributedString = NSAttributedString(string: trimmedText, attributes: [
-            .font: NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28),
+            .font: NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24),
             .foregroundColor: NSColor.white
         ])
         textView.textStorage?.append(attributedString)
@@ -813,7 +824,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paragraphStyle.lineSpacing = 8  // 增加行間距
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28),
+            .font: NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24),
             .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle
         ]
