@@ -146,7 +146,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
-    1. 中文與英文之間，中數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
+    1. 中文與英文之間，中字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
@@ -175,7 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
-                alert.informativeText = "請在統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
+                alert.informativeText = "請在統好設 TextCorrection 功能權限，便應用程序能夠正常工作。"
                 alert.addButton(withTitle: "打開統偏好設置")
                 alert.addButton(withTitle: "消")
                 
@@ -291,7 +291,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.apiReturnedText = ""
         self.originalText = ""
         self.currentTextView?.string = ""
-        self.statsView?.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
+        self.statsView?.stringValue = ""
     }
 
     func getSelectedText() -> String? {
@@ -401,13 +401,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         textWindow?.contentView?.addSubview(contentView)
 
+        // 移除所有現有的子視圖
+        contentView.subviews.forEach { $0.removeFromSuperview() }
+
         // 主要區域
         let mainArea = NSView()
         mainArea.translatesAutoresizingMaskIntoConstraints = false
         mainArea.identifier = NSUserInterfaceItemIdentifier("mainArea")
         contentView.addSubview(mainArea)
 
-        // 文字區域圓角）
+        // 文字區域（圓角）
         let textContainer = NSView()
         textContainer.translatesAutoresizingMaskIntoConstraints = false
         textContainer.wantsLayer = true
@@ -441,7 +444,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statsView.backgroundColor = .clear
         statsView.textColor = NSColor(hexString: "#727178") ?? .lightGray
         statsView.font = NSFont.systemFont(ofSize: 12)
-        statsView.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
+        statsView.stringValue = ""
         statsView.lineBreakMode = .byTruncatingTail
         mainArea.addSubview(statsView)
 
@@ -490,7 +493,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             contentView.trailingAnchor.constraint(equalTo: textWindow!.contentView!.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: textWindow!.contentView!.bottomAnchor),
 
-            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40),
+            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 50),
             mainArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             mainArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             mainArea.bottomAnchor.constraint(equalTo: bottomArea.topAnchor),
@@ -498,7 +501,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor),
             textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
-            textContainer.bottomAnchor.constraint(lessThanOrEqualTo: statsView.topAnchor, constant: -10),
+            textContainer.bottomAnchor.constraint(equalTo: statsView.topAnchor, constant: -10),
+            textContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 100), // 添加最小高度約束
 
             scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
@@ -506,13 +510,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
 
             textView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor, constant: 10),
-            textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor, constant: -10),
-            textView.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
+            textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            textView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
 
+            statsView.topAnchor.constraint(equalTo: textContainer.bottomAnchor, constant: 10),
             statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
-            statsView.bottomAnchor.constraint(equalTo: mainArea.bottomAnchor, constant: -10),
             statsView.heightAnchor.constraint(equalToConstant: 20),
 
             bottomArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -536,7 +540,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
         
-        // 重置文字視圖
+        // 重置文視圖
         textView.string = ""
         
         self.currentTextView = textView
@@ -552,6 +556,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 添加視窗大小變化的監聽器
         NotificationCenter.default.addObserver(self, selector: #selector(windowDidResize(_:)), name: NSWindow.didResizeNotification, object: textWindow)
+
+        // 添加調試代碼
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            print("mainArea frame: \(mainArea.frame)")
+            print("textContainer frame: \(textContainer.frame)")
+            print("scrollView frame: \(scrollView.frame)")
+            print("textView frame: \(textView.frame)")
+        }
+
+        // 設置 textView 的框架大小
+        textView.frame = scrollView.bounds
+        scrollView.documentView = textView
 
         rewriteText()  // 自動開始重寫
     }
@@ -578,35 +594,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
-        let font = NSFont(name: "仓耳今楷01-W05", size: 24) ?? NSFont.systemFont(ofSize: 24)
-        let lineHeight = font.pointSize * 1.2
-        let minTextContainerHeight = lineHeight * 2
-        let maxTextContainerHeight = mainArea.bounds.height - 80 // 留出一些空間給 statsView
+        let contentSize = textView.layoutManager?.usedRect(for: textView.textContainer!).size ?? .zero
+        let newHeight = max(contentSize.height + 30, 100) // 設置最小高度為 100
 
-        // 使用 layoutManager 來獲取文本的實際高度
-        let contentHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
-        let newHeight = min(max(contentHeight + 40, minTextContainerHeight), maxTextContainerHeight)
+        textView.frame.size.height = newHeight
+        
+        if let scrollView = textView.enclosingScrollView {
+            scrollView.documentView?.frame.size = CGSize(width: contentSize.width, height: newHeight)
+        }
 
         // 更新 textContainer 的高度約束
         if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
             heightConstraint.constant = newHeight
         } else {
-            let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
-            heightConstraint.priority = .defaultHigh // 設置較高的優先級，但不是必須的
-            heightConstraint.isActive = true
-            textContainer.addConstraint(heightConstraint)
+            textContainer.heightAnchor.constraint(equalToConstant: newHeight).isActive = true
         }
 
-        // 更新 textView 的大小
-        textView.frame.size = CGSize(width: textContainer.bounds.width - 20, height: contentHeight)
-        
-        // 更新 scrollView 的內容大小
-        if let scrollView = textView.enclosingScrollView {
-            scrollView.documentView?.frame.size = CGSize(width: textContainer.bounds.width - 20, height: contentHeight)
-        }
-        
-        // 強制更新佈局
         mainArea.layoutSubtreeIfNeeded()
+        
+        // 打印調試信息
+        print("Adjusted heights - textView: \(textView.frame.height), textContainer: \(textContainer.frame.height), mainArea: \(mainArea.frame.height)")
     }
 
     @objc func rewriteText() {
