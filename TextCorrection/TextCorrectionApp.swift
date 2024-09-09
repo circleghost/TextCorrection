@@ -11,6 +11,26 @@ import ApplicationServices
 import Carbon
 import HotKey
 
+extension NSColor {
+    convenience init?(hexString: String) {
+        let hex = hexString.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int = UInt64()
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            return nil
+        }
+        self.init(red: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: CGFloat(a) / 255)
+    }
+}
+
 func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask {
@@ -79,9 +99,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let compareThreshold = 100 // 累積多少字符後進行比較
     
     private var currentTextView: NSTextView?
-    private var rewriteButton: NSButton?
     private var copyButton: NSButton?
-    private var loadingLabel: NSTextField?
+    private var statsView: NSTextField?
     
     private var apiResponseText: String = ""
     private var apiReturnedText: String = ""
@@ -124,8 +143,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
     1. 中文與英文之間，中文數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
-    2. 以下情況不需調整：
-       - 括弧內的說明，例如（圖一）、（加入產品圖示）。
+    2. 以下情況需調整：
+       - 括弧內的說明，例如圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
        - 英文不一定要翻成中文。
        - emoji 或特殊符號是為了增加閱讀體驗，也不必調整。
@@ -153,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
                 alert.informativeText = "請在系統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
-                alert.addButton(withTitle: "打開系統偏好設置")
+                alert.addButton(withTitle: "打開統偏好設置")
                 alert.addButton(withTitle: "消")
                 
                 if alert.runModal() == .alertFirstButtonReturn {
@@ -256,7 +275,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.showTextWindow(text: selectedText)
                 }
             } else {
-                print("無法獲取選中的文字")
+                print("無法獲取選中文字")
             }
         }
     }
@@ -297,17 +316,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 計算基於文字長度的視窗大小
-        let textLength = text.count
-        let width = min(max(400, CGFloat(textLength) * 5), screenFrame.width * 0.8)
-        let height = min(max(300, CGFloat(textLength) * 0.5), screenFrame.height * 0.8)
+        // 增加視窗大小
+        let width = min(max(600, CGFloat(text.count) * 8), screenFrame.width * 0.9)
+        let height = min(max(400, CGFloat(text.count) * 0.5), screenFrame.height * 0.9)
         let size = NSSize(width: width, height: height)
         
-        // 獲取當前游標位置
         let mouseLocation = NSEvent.mouseLocation
         let windowFrame = NSRect(origin: mouseLocation, size: size)
-        
-        // 確保視窗完全在螢幕內
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
         if textWindow == nil {
@@ -317,8 +332,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow?.title = "AI 文字校正"
             textWindow?.titlebarAppearsTransparent = true
             textWindow?.isMovableByWindowBackground = true
-            textWindow?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.9)
-            textWindow?.minSize = NSSize(width: 400, height: 300)
+            textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.8) ?? .black.withAlphaComponent(0.8)
+            textWindow?.minSize = NSSize(width: 600, height: 400)
             textWindow?.isOpaque = false
             textWindow?.hasShadow = true
             textWindow?.appearance = NSAppearance(named: .darkAqua)
@@ -326,76 +341,97 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow?.setFrame(adjustedFrame, display: true)
         }
         
-        let visualEffectView = NSVisualEffectView(frame: (textWindow?.contentView?.bounds)!)
-        visualEffectView.material = .windowBackground  // 使用語義材質
-        visualEffectView.state = .active
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.appearance = NSAppearance(named: .darkAqua)
+        let contentView = NSView(frame: (textWindow?.contentView?.bounds)!)
         
-        let scrollView = NSScrollView(frame: visualEffectView.bounds)
+        // 主要區域
+        let mainArea = NSView(frame: NSRect(x: 0, y: 50, width: contentView.bounds.width, height: contentView.bounds.height - 50))
+        mainArea.wantsLayer = true
+        mainArea.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
+        
+        // 文字區域（圓角）
+        let textContainer = NSView(frame: NSRect(x: 20, y: 60, width: mainArea.bounds.width - 40, height: mainArea.bounds.height - 100))
+        textContainer.wantsLayer = true
+        textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.cgColor
+        textContainer.layer?.cornerRadius = 10
+        
+        let scrollView = NSScrollView(frame: textContainer.bounds.insetBy(dx: 10, dy: 10))
         scrollView.hasVerticalScroller = true
         scrollView.autoresizingMask = [.width, .height]
         scrollView.drawsBackground = false
         
         let textView = NSTextView(frame: scrollView.bounds)
         textView.autoresizingMask = [.width, .height]
-        textView.font = NSFont.systemFont(ofSize: 14)
+        textView.font = NSFont.systemFont(ofSize: 16)
         textView.string = ""
         textView.isEditable = false
-        textView.textContainerInset = NSSize(width: 20, height: 20)
-        textView.backgroundColor = .clear
-        textView.textColor = .white
-        textView.alignment = .center
+        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.backgroundColor = NSColor.clear
+        textView.textColor = NSColor.white
+        textView.alignment = .left
         scrollView.documentView = textView
         
-        let rewriteButton = NSButton(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
-        rewriteButton.title = "重寫文字"
-        rewriteButton.bezelStyle = .rounded
-        rewriteButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        rewriteButton.target = self
-        rewriteButton.action = #selector(rewriteText)
-        rewriteButton.isHidden = true
-        styleButton(rewriteButton)
-
-        let copyButton = NSButton(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
-        copyButton.title = "複製文字"
-        copyButton.bezelStyle = .rounded
-        copyButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        textContainer.addSubview(scrollView)
+        
+        // 統計信息
+        let statsView = NSTextField(frame: NSRect(x: 30, y: 20, width: mainArea.bounds.width - 60, height: 20))
+        statsView.isEditable = false
+        statsView.isBordered = false
+        statsView.backgroundColor = .clear
+        statsView.textColor = NSColor(hexString: "#727178") ?? .lightGray
+        statsView.font = NSFont.systemFont(ofSize: 12)
+        statsView.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
+        
+        mainArea.addSubview(textContainer)
+        mainArea.addSubview(statsView)
+        
+        // 底部區域
+        let bottomArea = NSView(frame: NSRect(x: 0, y: 0, width: contentView.bounds.width, height: 50))
+        bottomArea.wantsLayer = true
+        bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.cgColor
+        
+        // 複製按鈕
+        let copyButton = NSButton(frame: NSRect(x: bottomArea.bounds.width - 180, y: 10, width: 150, height: 30))
+        copyButton.title = "複製並貼上"
+        copyButton.bezelStyle = .inline
+        copyButton.isBordered = false
+        copyButton.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         copyButton.target = self
         copyButton.action = #selector(copyRewrittenText)
-        copyButton.isHidden = true
-        styleButton(copyButton)
-
-        let loadingLabel = NSTextField(frame: NSRect(x: 10, y: 10, width: 120, height: 40))
-        loadingLabel.stringValue = "AI 校正中..."
-        loadingLabel.isEditable = false
-        loadingLabel.isBordered = false
-        loadingLabel.backgroundColor = .clear
-        loadingLabel.alignment = .center
-        loadingLabel.font = NSFont.systemFont(ofSize: 16, weight: .medium)
-        loadingLabel.textColor = NSColor(red: 0.4, green: 0.8, blue: 1.0, alpha: 1.0)
-
-        let stackView = NSStackView(frame: visualEffectView.bounds)
-        stackView.orientation = .vertical
-        stackView.spacing = 20
-        stackView.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        stackView.addArrangedSubview(scrollView)
-        stackView.addArrangedSubview(loadingLabel)
-        stackView.addArrangedSubview(rewriteButton)
-        stackView.addArrangedSubview(copyButton)
+        copyButton.contentTintColor = .white
         
-        visualEffectView.addSubview(stackView)
+        // Enter 符號
+        let enterSymbolContainer = NSView(frame: NSRect(x: copyButton.frame.maxX, y: 10, width: 30, height: 30))
+        enterSymbolContainer.wantsLayer = true
+        enterSymbolContainer.layer?.backgroundColor = NSColor(hexString: "#3B3A42")?.cgColor
+        enterSymbolContainer.layer?.cornerRadius = 5
+        
+        let enterSymbol = NSTextField(frame: NSRect(x: 0, y: 0, width: 30, height: 30))
+        enterSymbol.isEditable = false
+        enterSymbol.isBordered = false
+        enterSymbol.backgroundColor = .clear
+        enterSymbol.textColor = .white
+        enterSymbol.font = NSFont.systemFont(ofSize: 16)
+        enterSymbol.stringValue = "⏎"
+        enterSymbol.alignment = .center
+        
+        enterSymbolContainer.addSubview(enterSymbol)
+        
+        bottomArea.addSubview(copyButton)
+        bottomArea.addSubview(enterSymbolContainer)
+        
+        contentView.addSubview(mainArea)
+        contentView.addSubview(bottomArea)
+        
         textWindow?.contentView?.subviews.forEach { $0.removeFromSuperview() }
-        textWindow?.contentView?.addSubview(visualEffectView)
+        textWindow?.contentView?.addSubview(contentView)
         textWindow?.makeKeyAndOrderFront(nil)
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
         
         self.currentTextView = textView
         self.originalText = text
-        self.rewriteButton = rewriteButton
         self.copyButton = copyButton
-        self.loadingLabel = loadingLabel
+        self.statsView = statsView
         
         rewriteText()  // 自動開始重寫
     }
@@ -417,11 +453,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                await MainActor.run {
-                    self.loadingLabel?.isHidden = false
-                    self.rewriteButton?.isHidden = true
-                    self.copyButton?.isHidden = true
-                }
                 print("調用 OpenAI API...")
                 
                 self.apiReturnedText = ""  // 重置 API 返回的文字
@@ -439,17 +470,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 print("API 返回的文字度：\(self.apiReturnedText.count)")
                 
-                // 在這裡添加一個小延遲，確保所有更新都已完成
+                // 在這裡添加一個小延遲，確保所有新都已完成
                 try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
 
                 // API 返回完整結果後，進行比較並呈現結果
                 await self.showComparisonResults(textView: textView)
+                self.updateStats(rewrittenText: self.apiReturnedText)
                 
                 await MainActor.run {
                     self.isRewriting = false
-                    self.loadingLabel?.isHidden = true
-                    self.rewriteButton?.isHidden = true
-                    self.copyButton?.isHidden = false
                 }
                 print("文字重寫完成")
             } catch {
@@ -457,9 +486,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run {
                     self.showErrorAlert(message: "重寫文字時發生錯誤：\(error.localizedDescription)")
                     self.isRewriting = false
-                    self.loadingLabel?.isHidden = true
-                    self.rewriteButton?.isHidden = false
-                    self.copyButton?.isHidden = true
                 }
             }
         }
@@ -508,7 +534,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             self.copyButton?.title = "已複製"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                self.copyButton?.title = "複製文字"
+                self.copyButton?.title = "複製並貼上"
             }
         }
     }
@@ -681,15 +707,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return diff
     }
 
-    func styleButton(_ button: NSButton) {
-        button.wantsLayer = true
-        button.layer?.backgroundColor = NSColor(red: 0.2, green: 0.6, blue: 1.0, alpha: 1.0).cgColor
-        button.layer?.cornerRadius = 20
-        button.contentTintColor = .white
-        button.shadow = NSShadow()
-        button.shadow?.shadowColor = NSColor.black.withAlphaComponent(0.3)
-        button.shadow?.shadowOffset = NSSize(width: 0, height: 2)
-        button.shadow?.shadowBlurRadius = 4
+    func updateStats(rewrittenText: String) {
+        let rewrittenCharCount = rewrittenText.count
+        let changesCount = calculateChanges(rewritten: rewrittenText)
+        
+        DispatchQueue.main.async {
+            self.statsView?.stringValue = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4"
+        }
+    }
+
+    func calculateChanges(rewritten: String) -> Int {
+        let diff = diffStrings(originalText, rewritten)
+        var changesCount = 0
+        
+        for change in diff {
+            switch change {
+            case .insert, .delete:
+                changesCount += 1
+            case .equal:
+                continue
+            }
+        }
+        
+        return changesCount
     }
 }
 
