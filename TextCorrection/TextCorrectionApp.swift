@@ -80,6 +80,10 @@ struct OpenAIRequest: Encodable {
     }
 }
 
+func trimExtraWhitespace(_ text: String) -> String {
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var floatingButton: NSWindow?
@@ -142,8 +146,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private let systemPrompt = """
     你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
-    1. 中文與英文之間，中文數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
-    2. 以下情況調整：
+    1. 中文與英文之間，中數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
+    2. 以下情調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
        - 阿拉伯數字不用調整成中文。
        - 英文不一定要翻成中文。
@@ -171,7 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
-                alert.informativeText = "請在系統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
+                alert.informativeText = "請在統好設為 TextCorrection 功能權限，便應用程序能夠正常工作。"
                 alert.addButton(withTitle: "打開統偏好設置")
                 alert.addButton(withTitle: "消")
                 
@@ -316,9 +320,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 60%
-        let width = screenFrame.width * 0.6
-        let height = screenFrame.height * 0.6
+        // 設定視窗大小為螢幕的 70%
+        let width = screenFrame.width * 0.7
+        let height = screenFrame.height * 0.7
         let size = NSSize(width: width, height: height)
         
         let mouseLocation = NSEvent.mouseLocation
@@ -329,14 +333,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow = NSPanel(contentRect: adjustedFrame,
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
-            textWindow?.title = "AI 文字正"
-            textWindow?.titlebarAppearsTransparent = true
+            textWindow?.title = "AI 文字檢查"
+            textWindow?.titlebarAppearsTransparent = false
             textWindow?.isMovableByWindowBackground = true
             textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.8) ?? .black.withAlphaComponent(0.8)
             textWindow?.minSize = NSSize(width: 400, height: 300)
             textWindow?.isOpaque = false
             textWindow?.hasShadow = true
             textWindow?.appearance = NSAppearance(named: .darkAqua)
+            
+            // 設置標題字體和大小
+            if let titleFont = NSFont(name: "仓耳今楷01-W05", size: 18) {
+                textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
+                textWindow?.title = "AI 文字檢查"
+                textWindow?.titleVisibility = .visible
+                textWindow?.titlebarAppearsTransparent = false
+                textWindow?.styleMask.insert(.titled)
+                textWindow?.standardWindowButton(.closeButton)?.superview?.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
+                
+                if let titleView = textWindow?.standardWindowButton(.closeButton)?.superview {
+                    titleView.wantsLayer = true
+                    titleView.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
+                    
+                    let titleLabel = NSTextField(frame: NSRect(x: 0, y: 0, width: titleView.frame.width, height: titleView.frame.height))
+                    titleLabel.stringValue = "AI 文字檢查"
+                    titleLabel.alignment = .center
+                    titleLabel.font = titleFont
+                    titleLabel.textColor = .white
+                    titleLabel.isBezeled = false
+                    titleLabel.isEditable = false
+                    titleLabel.drawsBackground = false
+                    titleView.addSubview(titleLabel)
+                    
+                    titleLabel.translatesAutoresizingMaskIntoConstraints = false
+                    NSLayoutConstraint.activate([
+                        titleLabel.centerXAnchor.constraint(equalTo: titleView.centerXAnchor),
+                        titleLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
+                        titleLabel.widthAnchor.constraint(equalTo: titleView.widthAnchor),
+                        titleLabel.heightAnchor.constraint(equalTo: titleView.heightAnchor)
+                    ])
+                }
+            }
         } else {
             textWindow?.setFrame(adjustedFrame, display: true)
         }
@@ -348,6 +385,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 主要區域
         let mainArea = NSView()
         mainArea.translatesAutoresizingMaskIntoConstraints = false
+        mainArea.identifier = NSUserInterfaceItemIdentifier("mainArea")
         contentView.addSubview(mainArea)
 
         // 文字區域（圓角）
@@ -356,6 +394,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textContainer.wantsLayer = true
         textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.cgColor
         textContainer.layer?.cornerRadius = 10
+        textContainer.identifier = NSUserInterfaceItemIdentifier("textContainer")
         mainArea.addSubview(textContainer)
 
         let scrollView = NSScrollView()
@@ -366,7 +405,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let textView = NSTextView(frame: scrollView.bounds)
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.font = NSFont.systemFont(ofSize: 28)  // 增大字體大小到28
+        textView.font = NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28)
         textView.string = ""
         textView.isEditable = false
         textView.textContainerInset = NSSize(width: 15, height: 15)  // 增加內邊距
@@ -431,26 +470,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             contentView.trailingAnchor.constraint(equalTo: textWindow!.contentView!.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: textWindow!.contentView!.bottomAnchor),
 
-            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor),
+            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 40),
             mainArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             mainArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             mainArea.bottomAnchor.constraint(equalTo: bottomArea.topAnchor),
 
-            textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor, constant: 20),
+            textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor),
             textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
-            textContainer.bottomAnchor.constraint(equalTo: statsView.topAnchor, constant: -20),
-            textContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 150),  // 增加最小高度
+            textContainer.bottomAnchor.constraint(lessThanOrEqualTo: statsView.topAnchor, constant: -10),
 
             scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: textContainer.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
 
-            textView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            textView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            textView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            textView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -20), // 減去滾動條寬度
 
             statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
@@ -489,7 +527,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 初始調整文字框大小
         self.adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
 
+        // 添加視窗大小變化的監聽器
+        NotificationCenter.default.addObserver(self, selector: #selector(windowDidResize(_:)), name: NSWindow.didResizeNotification, object: textWindow)
+
         rewriteText()  // 自動開始重寫
+    }
+
+    @objc func windowDidResize(_ notification: Notification) {
+        if let window = notification.object as? NSWindow,
+           let contentView = window.contentView,
+           let mainArea = contentView.subviews.first(where: { $0.identifier?.rawValue == "mainArea" }),
+           let textContainer = mainArea.subviews.first(where: { $0.identifier?.rawValue == "textContainer" }),
+           let scrollView = textContainer.subviews.first as? NSScrollView,
+           let textView = scrollView.documentView as? NSTextView {
+            adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
+        }
     }
 
     @objc func textDidChange(_ notification: Notification) {
@@ -503,31 +555,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
-        let font = NSFont.systemFont(ofSize: 28)
+        let font = NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28)
         let lineHeight = font.pointSize * 1.2
         let minTextContainerHeight = lineHeight * 2
-        let maxTextContainerHeight = mainArea.bounds.height - 100
+        let maxTextContainerHeight = mainArea.bounds.height - 80 // 留出一些空間給 statsView
 
         // 使用 layoutManager 來獲取文本的實際高度
         let contentHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
         let newHeight = min(max(contentHeight + 40, minTextContainerHeight), maxTextContainerHeight)
 
-        let oldFrame = textContainer.frame
-        let newFrame = NSRect(x: oldFrame.minX, y: mainArea.bounds.height - newHeight - 20, width: oldFrame.width, height: newHeight)
-
-        textContainer.frame = newFrame
-
-        // 調整統計信息的位置
-        if let statsView = self.statsView {
-            statsView.frame = NSRect(x: statsView.frame.minX, y: newFrame.minY - 30, width: statsView.frame.width, height: statsView.frame.height)
+        // 更新約束
+        if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
+            heightConstraint.constant = newHeight
+        } else {
+            let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
+            heightConstraint.isActive = true
+            textContainer.addConstraint(heightConstraint)
         }
 
-        // 如果需要，調整視窗大小
-        if newHeight == maxTextContainerHeight {
-            let currentSize = textWindow?.frame.size ?? .zero
-            let newSize = NSSize(width: currentSize.width, height: currentSize.height + (newHeight - oldFrame.height))
-            textWindow?.setFrame(NSRect(origin: textWindow?.frame.origin ?? .zero, size: newSize), display: true, animate: true)
+        // 調整滾動視圖的大小
+        if let scrollView = textView.enclosingScrollView {
+            scrollView.frame = textContainer.bounds
         }
+
+        // 更新 textView 的大小
+        textView.frame.size.height = contentHeight
+        textView.needsLayout = true
+        textView.needsDisplay = true
+
+        // 強制更新佈局
+        mainArea.layoutSubtreeIfNeeded()
     }
 
     @objc func rewriteText() {
@@ -542,14 +599,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         isRewriting = true
-        print("開始重寫文字，原始文字長度：\(originalText.count)")
+        print("開始重寫文，原始文字長度：\(originalText.count)")
         
         Task { [weak self] in
             guard let self = self else { return }
             do {
                 print("調用 OpenAI API...")
                 
-                self.apiReturnedText = ""  // 重置 API 返���的文字
+                self.apiReturnedText = ""  // 重置 API 返的文字
                 
                 try await withTimeout(seconds: 30) {
                     try await self.streamOpenAiApi(text: self.originalText) { rewrittenText in
@@ -576,7 +633,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 print("文字重寫完成")
             } catch {
-                print("重寫文字時發生錯誤: \(error)")
+                print("重文字時發生錯誤: \(error)")
                 await MainActor.run {
                     self.showErrorAlert(message: "重寫文字時發生錯誤：\(error.localizedDescription)")
                     self.isRewriting = false
@@ -586,12 +643,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func updateStreamText(textView: NSTextView, newText: String) {
-        let attributedString = NSAttributedString(string: newText, attributes: [
-            .font: NSFont.systemFont(ofSize: 28),  // 增大字體大小到28
+        let trimmedText = trimExtraWhitespace(newText)
+        let attributedString = NSAttributedString(string: trimmedText, attributes: [
+            .font: NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28),
             .foregroundColor: NSColor.white
         ])
         textView.textStorage?.append(attributedString)
         textView.scrollToEndOfDocument(nil)
+        
+        // 調整文字框高度
+        if let textContainer = textView.superview?.superview,
+           let mainArea = textContainer.superview {
+            adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
+        }
     }
 
     func showComparisonResults(textView: NSTextView) async {
@@ -604,7 +668,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let originalTextCopy = self.originalText
-        let apiReturnedTextCopy = self.apiReturnedText
+        let apiReturnedTextCopy = trimExtraWhitespace(self.apiReturnedText)
         
         await MainActor.run {
             let comparisonResult = self.compareTexts(original: originalTextCopy, rewritten: apiReturnedTextCopy)
@@ -644,7 +708,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             model: "gpt-4o-mini",
             messages: [
                 OpenAIRequest.Message(role: "system", content: systemPrompt),
-                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改掉錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
+                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改���錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
             ],
             temperature: 0.7,
             maxTokens: 1000,
@@ -692,7 +756,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        // 在這裡添加一個最終的更新，確保使用完整的內容
+        // 在這裡添加一個最終的更新，確使用完整的內容
         onUpdate("\n")  // 添加一個換行符來觸發最後一次更新
         
         print("成功獲取重寫後的文字，總長度：\(fullContent.count)")
@@ -730,7 +794,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paragraphStyle.lineSpacing = 8  // 增加行間距
         
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 28),  // 增大字體大小到28
+            .font: NSFont(name: "仓耳今楷01-W05", size: 28) ?? NSFont.systemFont(ofSize: 28),
             .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle
         ]

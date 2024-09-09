@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
+		4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
+		4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		478434202C8C38D500456192 /* TextCorrectionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784341F2C8C38D500456192 /* TextCorrectionApp.swift */; };
 		478434222C8C38D500456192 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478434212C8C38D500456192 /* ContentView.swift */; };
 		478434242C8C38D700456192 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 478434232C8C38D700456192 /* Assets.xcassets */; };
@@ -38,6 +41,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "仓耳今楷01-W05.ttf"; sourceTree = "<group>"; };
 		4784341C2C8C38D500456192 /* TextCorrection.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TextCorrection.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4784341F2C8C38D500456192 /* TextCorrectionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextCorrectionApp.swift; sourceTree = "<group>"; };
 		478434212C8C38D500456192 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -103,6 +107,7 @@
 		4784341E2C8C38D500456192 /* TextCorrection */ = {
 			isa = PBXGroup;
 			children = (
+				4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */,
 				4784341F2C8C38D500456192 /* TextCorrectionApp.swift */,
 				478434212C8C38D500456192 /* ContentView.swift */,
 				478434232C8C38D700456192 /* Assets.xcassets */,
@@ -257,6 +262,7 @@
 			files = (
 				478434272C8C38D700456192 /* Preview Assets.xcassets in Resources */,
 				478434242C8C38D700456192 /* Assets.xcassets in Resources */,
+				4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,6 +270,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,6 +278,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
