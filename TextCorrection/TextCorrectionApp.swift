@@ -354,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow = NSPanel(contentRect: adjustedFrame,
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                   backing: .buffered, defer: false)
-            textWindow?.title = "AI 文字檢查"
+            textWindow?.title = "AI 潤飾"
             textWindow?.titlebarAppearsTransparent = false
             textWindow?.isMovableByWindowBackground = true
             
@@ -375,7 +375,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // 設置標題字體和大小
             if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
                 textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
-                textWindow?.title = "AI 文字檢查"
+                textWindow?.title = "AI 潤飾"
                 textWindow?.titleVisibility = .visible
                 textWindow?.titlebarAppearsTransparent = false
                 textWindow?.styleMask.insert(.titled)
@@ -386,7 +386,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     titleView.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
                     
                     let titleLabel = NSTextField(frame: NSRect(x: 0, y: 0, width: titleView.frame.width, height: titleView.frame.height))
-                    titleLabel.stringValue = "AI 文字檢查"
+                    titleLabel.stringValue = "AI 潤飾"
                     titleLabel.alignment = .center
                     titleLabel.font = titleFont
                     titleLabel.textColor = .white
@@ -808,7 +808,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             throw TextCorrectionError.apiError(statusCode: httpResponse.statusCode)
         }
         
-        print("開始解析式響應...")
+        print("開始解析串流響應...")
         var fullContent = ""
         for try await line in bytes.lines {
             if line.hasPrefix("data: "), let data = line.dropFirst(6).data(using: .utf8) {
@@ -822,10 +822,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        // 在這裡添加一個最終的更新，確使用完整的內容
+        // 在這裡添加一個最終的更新，確保使用完整的內容
         onUpdate("\n")  // 添加一個換行符來觸發最後一次更新
         
         print("成功獲取重寫後的文字，總長度：\(fullContent.count)")
+        print("API 完整回應：\n\(fullContent)")  // 新增這行來輸出完整的 API 回應
     }
 
     func showErrorAlert(message: String) {
@@ -863,7 +864,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .font: self.customFont,
             .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle,
-            .kern: 1.0  // 增加字距
+            .kern: 1.5  // 增加字距
         ]
         
         let diff = diffStrings(original, rewritten)
