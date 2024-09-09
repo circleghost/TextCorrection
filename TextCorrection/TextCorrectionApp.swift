@@ -171,7 +171,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
         
         if !accessibilityEnabled {
-            print("請在系統偏好設置中啟用輔助功權限")
+            print("請在��統偏好設置中啟用���助功權限")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
@@ -274,6 +274,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
+                    // 重置舊的狀態
+                    self?.resetState()
+                    
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(selectedText, forType: .string)
                     self?.showTextWindow(text: selectedText)
@@ -282,6 +285,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 print("無法獲取選中文字")
             }
         }
+    }
+
+    func resetState() {
+        self.apiReturnedText = ""
+        self.originalText = ""
+        self.currentTextView?.string = ""
+        self.statsView?.stringValue = "字元數: 0 | 改變: 0 | 模型: GPT-4"
     }
 
     func getSelectedText() -> String? {
@@ -388,7 +398,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainArea.identifier = NSUserInterfaceItemIdentifier("mainArea")
         contentView.addSubview(mainArea)
 
-        // 文字區域（圓角）
+        // 文字區域圓角）
         let textContainer = NSView()
         textContainer.translatesAutoresizingMaskIntoConstraints = false
         textContainer.wantsLayer = true
@@ -486,9 +496,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
 
             textView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
-            textView.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -20), // 減去滾動條寬度
+            textView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor, constant: 10),
+            textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor, constant: -10),
 
             statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
             statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
@@ -515,6 +524,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textWindow?.makeKeyAndOrderFront(nil)
         textWindow?.level = .floating
         NSApp.activate(ignoringOtherApps: true)
+        
+        // 重置文字視圖
+        textView.string = ""
         
         self.currentTextView = textView
         self.originalText = text
@@ -564,25 +576,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentHeight = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
         let newHeight = min(max(contentHeight + 40, minTextContainerHeight), maxTextContainerHeight)
 
-        // 更新約束
+        // 更新 textContainer 的高度約束
         if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
             heightConstraint.constant = newHeight
         } else {
             let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
+            heightConstraint.priority = .defaultHigh // 設置較高的優先級，但不是必須的
             heightConstraint.isActive = true
             textContainer.addConstraint(heightConstraint)
         }
 
-        // 調整滾動視圖的大小
-        if let scrollView = textView.enclosingScrollView {
-            scrollView.frame = textContainer.bounds
-        }
-
         // 更新 textView 的大小
-        textView.frame.size.height = contentHeight
-        textView.needsLayout = true
-        textView.needsDisplay = true
-
+        textView.frame.size = CGSize(width: textContainer.bounds.width - 20, height: contentHeight)
+        
+        // 更新 scrollView 的內容大小
+        if let scrollView = textView.enclosingScrollView {
+            scrollView.documentView?.frame.size = CGSize(width: textContainer.bounds.width - 20, height: contentHeight)
+        }
+        
         // 強制更新佈局
         mainArea.layoutSubtreeIfNeeded()
     }
@@ -599,14 +610,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         isRewriting = true
-        print("開始重寫文，原始文字長度：\(originalText.count)")
+        print("開始重寫文字，原始文字長度：\(originalText.count)")
+        
+        // 重置 API 返回的文字和清空 textView
+        self.apiReturnedText = ""
+        textView.string = ""
         
         Task { [weak self] in
             guard let self = self else { return }
             do {
                 print("調用 OpenAI API...")
-                
-                self.apiReturnedText = ""  // 重置 API 返的文字
                 
                 try await withTimeout(seconds: 30) {
                     try await self.streamOpenAiApi(text: self.originalText) { rewrittenText in
@@ -619,9 +632,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 
-                print("API 返回的文字度：\(self.apiReturnedText.count)")
+                print("API 返回的文字長度：\(self.apiReturnedText.count)")
                 
-                // 在這裡添加一個小延遲，確保所有新都已完成
+                // 在這裡添加一個小延遲，確保所有新文字都已完成
                 try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
 
                 // API 返回完整結果後，進行比較並呈現結果
@@ -633,7 +646,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 print("文字重寫完成")
             } catch {
-                print("重文字時發生錯誤: \(error)")
+                print("重寫文字時發生錯誤: \(error)")
                 await MainActor.run {
                     self.showErrorAlert(message: "重寫文字時發生錯誤：\(error.localizedDescription)")
                     self.isRewriting = false
@@ -652,7 +665,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         textView.scrollToEndOfDocument(nil)
         
         // 調整文字框高度
-        if let textContainer = textView.superview?.superview,
+        if let textContainer = textView.enclosingScrollView?.superview,
            let mainArea = textContainer.superview {
             adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
         }
@@ -662,7 +675,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !apiReturnedText.isEmpty else {
             print("錯誤：API 返回的文字為空")
             await MainActor.run {
-                textView.string = "錯誤：API 未返回何文字"
+                textView.string = "錯誤：API 未返回任何文字"
             }
             return
         }
@@ -675,6 +688,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("比較結果的長度：\(comparisonResult.length)")
             textView.textStorage?.setAttributedString(comparisonResult)
             textView.scrollToEndOfDocument(nil)
+            
+            // 調整文字框大小
+            if let textContainer = textView.enclosingScrollView?.superview,
+               let mainArea = textContainer.superview {
+                self.adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
+            }
         }
     }
 
@@ -708,7 +727,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             model: "gpt-4o-mini",
             messages: [
                 OpenAIRequest.Message(role: "system", content: systemPrompt),
-                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改���錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
+                OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
             ],
             temperature: 0.7,
             maxTokens: 1000,
