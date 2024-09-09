@@ -105,6 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var currentTextView: NSTextView?
     private var copyButton: NSButton?
     private var statsView: NSTextField?
+    private var shortcutView: NSTextField?
     
     private var apiResponseText: String = ""
     private var apiReturnedText: String = ""
@@ -147,7 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let customFont: NSFont
 
     private let systemPrompt = """
-    你是一名專業的臺灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別��意以下規則：
+    你是一名專業的灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別意以下規則：
     1. 中文與英文之間，中數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
     2. 以下情調整：
        - 括弧內的說明，例如圖一）、（加入產品圖示）。
@@ -178,7 +179,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
         
         if !accessibilityEnabled {
-            print("請在統偏好設置中啟用助功權���")
+            print("請在統偏好設置中啟用助功權")
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 alert.messageText = "要輔助功能權限"
@@ -281,7 +282,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
-                    // 重舊的��態
+                    // 重舊的態
                     self?.resetState()
                     
                     NSPasteboard.general.clearContents()
@@ -299,6 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.originalText = ""
         self.currentTextView?.string = ""
         self.statsView?.stringValue = ""
+        self.shortcutView?.stringValue = ""
     }
 
     func getSelectedText() -> String? {
@@ -340,6 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         currentTextView = nil
         copyButton = nil
         statsView = nil
+        shortcutView = nil
         apiReturnedText = ""
         originalText = ""
     }
@@ -455,6 +458,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         scrollView.documentView = textView
 
         // 統計信息
+        let statsContainer = NSView()
+        statsContainer.translatesAutoresizingMaskIntoConstraints = false
+        mainArea.addSubview(statsContainer)
+
         let statsView = NSTextField()
         statsView.translatesAutoresizingMaskIntoConstraints = false
         statsView.isEditable = false
@@ -464,7 +471,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statsView.font = NSFont.systemFont(ofSize: 12)
         statsView.stringValue = ""
         statsView.lineBreakMode = .byTruncatingTail
-        mainArea.addSubview(statsView)
+        statsContainer.addSubview(statsView)
+
+        let shortcutView = NSTextField()
+        shortcutView.translatesAutoresizingMaskIntoConstraints = false
+        shortcutView.isEditable = false
+        shortcutView.isBordered = false
+        shortcutView.backgroundColor = .clear
+        shortcutView.textColor = NSColor(hexString: "#727178") ?? .lightGray
+        shortcutView.font = NSFont.systemFont(ofSize: 12)
+        shortcutView.stringValue = "複製文字 ⌘+C"
+        shortcutView.alignment = .right
+        statsContainer.addSubview(shortcutView)
 
         // 底部區域
         let bottomArea = NSView()
@@ -473,7 +491,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.cgColor
         contentView.addSubview(bottomArea)
 
-        // 複製按鈕
+        // 複製並貼上按鈕和 Enter 符號容器
+        let actionContainer = NSView()
+        actionContainer.translatesAutoresizingMaskIntoConstraints = false
+        bottomArea.addSubview(actionContainer)
+
         let copyButton = NSButton()
         copyButton.translatesAutoresizingMaskIntoConstraints = false
         copyButton.title = "複製並貼上"
@@ -481,28 +503,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         copyButton.isBordered = false
         copyButton.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         copyButton.target = self
-        copyButton.action = #selector(copyRewrittenText)
+        copyButton.action = #selector(copyAndPasteRewrittenText)
         copyButton.contentTintColor = .white
-        bottomArea.addSubview(copyButton)
+        actionContainer.addSubview(copyButton)
 
-        // Enter 符號
-        let enterSymbolContainer = NSView()
+        let enterSymbolContainer = NSButton()
         enterSymbolContainer.translatesAutoresizingMaskIntoConstraints = false
         enterSymbolContainer.wantsLayer = true
         enterSymbolContainer.layer?.backgroundColor = NSColor(hexString: "#3B3A42")?.cgColor
         enterSymbolContainer.layer?.cornerRadius = 5
-        bottomArea.addSubview(enterSymbolContainer)
-
-        let enterSymbol = NSTextField()
-        enterSymbol.translatesAutoresizingMaskIntoConstraints = false
-        enterSymbol.isEditable = false
-        enterSymbol.isBordered = false
-        enterSymbol.backgroundColor = .clear
-        enterSymbol.textColor = .white
-        enterSymbol.font = NSFont.systemFont(ofSize: 16)
-        enterSymbol.stringValue = "⏎"
-        enterSymbol.alignment = .center
-        enterSymbolContainer.addSubview(enterSymbol)
+        enterSymbolContainer.target = self
+        enterSymbolContainer.action = #selector(copyAndPasteRewrittenText)
+        enterSymbolContainer.title = "⏎"
+        enterSymbolContainer.font = NSFont.systemFont(ofSize: 16)
+        enterSymbolContainer.contentTintColor = .white
+        actionContainer.addSubview(enterSymbolContainer)
 
         // 設置約束
         NSLayoutConstraint.activate([
@@ -531,27 +546,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textView.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
             textView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
 
-            statsView.topAnchor.constraint(equalTo: textContainer.bottomAnchor, constant: 10),
-            statsView.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
-            statsView.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
-            statsView.heightAnchor.constraint(equalToConstant: 20),
-            statsView.bottomAnchor.constraint(lessThanOrEqualTo: bottomArea.topAnchor, constant: -10),
+            statsContainer.topAnchor.constraint(equalTo: textContainer.bottomAnchor, constant: 10),
+            statsContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor, constant: 20),
+            statsContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor, constant: -20),
+            statsContainer.heightAnchor.constraint(equalToConstant: 20),
+
+            statsView.leadingAnchor.constraint(equalTo: statsContainer.leadingAnchor),
+            statsView.centerYAnchor.constraint(equalTo: statsContainer.centerYAnchor),
+
+            shortcutView.trailingAnchor.constraint(equalTo: statsContainer.trailingAnchor),
+            shortcutView.centerYAnchor.constraint(equalTo: statsContainer.centerYAnchor),
 
             bottomArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             bottomArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             bottomArea.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             bottomArea.heightAnchor.constraint(equalToConstant: 50),
 
-            copyButton.trailingAnchor.constraint(equalTo: enterSymbolContainer.leadingAnchor, constant: -10),
-            copyButton.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
+            actionContainer.trailingAnchor.constraint(equalTo: bottomArea.trailingAnchor, constant: -20),
+            actionContainer.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
 
-            enterSymbolContainer.trailingAnchor.constraint(equalTo: bottomArea.trailingAnchor, constant: -20),
-            enterSymbolContainer.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
+            copyButton.trailingAnchor.constraint(equalTo: enterSymbolContainer.leadingAnchor, constant: -10),
+            copyButton.centerYAnchor.constraint(equalTo: actionContainer.centerYAnchor),
+
+            enterSymbolContainer.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
+            enterSymbolContainer.centerYAnchor.constraint(equalTo: actionContainer.centerYAnchor),
             enterSymbolContainer.widthAnchor.constraint(equalToConstant: 30),
             enterSymbolContainer.heightAnchor.constraint(equalToConstant: 30),
-
-            enterSymbol.centerXAnchor.constraint(equalTo: enterSymbolContainer.centerXAnchor),
-            enterSymbol.centerYAnchor.constraint(equalTo: enterSymbolContainer.centerYAnchor)
         ])
         
         textWindow?.makeKeyAndOrderFront(nil)
@@ -562,6 +582,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.originalText = text
         self.copyButton = copyButton
         self.statsView = statsView
+        self.shortcutView = shortcutView
         
         // 設置文字變化監聽器
         NotificationCenter.default.addObserver(self, selector: #selector(textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
@@ -581,6 +602,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 開始重寫
         self.rewriteText()
+
+        // 添加鍵盤監聽器
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.contains(.command) && event.keyCode == 8 { // Cmd + C
+                self?.copyAndPasteRewrittenText()
+                return nil
+            } else if event.keyCode == 36 { // Enter
+                self?.copyAndPasteRewrittenText()
+                return nil
+            }
+            return event
+        }
     }
 
     @objc func windowDidResize(_ notification: Notification) {
@@ -729,7 +762,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func copyRewrittenText() {
+    @objc func copyAndPasteRewrittenText() {
         guard !apiReturnedText.isEmpty else {
             print("錯誤：API 返回的文字為空")
             return
@@ -739,9 +772,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSPasteboard.general.setString(apiReturnedText, forType: .string)
         print("已複製 API 返回的糾正後文字")
         
+        // 觸發貼上快捷鍵
+        let source = CGEventSource(stateID: .hidSystemState)
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        
+        cmdDown?.flags = .maskCommand
+        vDown?.flags = .maskCommand
+        vUp?.flags = .maskCommand
+        cmdUp?.flags = .maskCommand
+        
+        cmdDown?.post(tap: .cghidEventTap)
+        vDown?.post(tap: .cghidEventTap)
+        vUp?.post(tap: .cghidEventTap)
+        cmdUp?.post(tap: .cghidEventTap)
+        
         // 添加視覺反饋
         DispatchQueue.main.async {
-            self.copyButton?.title = "已複製"
+            self.copyButton?.title = "已複製並貼上"
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 self.copyButton?.title = "複製並貼上"
             }
