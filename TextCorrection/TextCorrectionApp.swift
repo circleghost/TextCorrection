@@ -282,7 +282,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
-                    // 重舊的態
+                    // ��舊的態
                     self?.resetState()
                     
                     NSPasteboard.general.clearContents()
@@ -649,10 +649,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 更新 textContainer 的高度約束
         if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
+            let oldHeight = heightConstraint.constant
             heightConstraint.constant = newHeight
+            
+            // 計算高度變化
+            let heightDifference = newHeight - oldHeight
+            
+            // 調整視窗大小
+            if let window = textView.window {
+                var frame = window.frame
+                frame.size.height += heightDifference
+                frame.origin.y -= heightDifference // 保持視窗頂部位置不變
+                window.setFrame(frame, display: true, animate: true)
+            }
         } else {
             let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
-            heightConstraint.priority = .defaultHigh // 設置較高的優先級，但不是必須的
+            heightConstraint.priority = .defaultHigh
             heightConstraint.isActive = true
         }
 
