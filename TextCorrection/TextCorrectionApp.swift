@@ -339,7 +339,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 設定視窗大小為螢幕的 50% 寬度和 40% 高度
         let width = screenFrame.width * 0.5
-        let height = screenFrame.height * 0.4
+        let height = screenFrame.height * 0.25
         let size = NSSize(width: width, height: height)
         
         // 計算視窗位置，使其位於畫面正中央
@@ -917,7 +917,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let changesCount = calculateChanges(rewritten: rewrittenText)
         
         DispatchQueue.main.async {
-            self.statsView?.stringValue = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4"
+            self.statsView?.stringValue = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4o-mini"
         }
     }
 
