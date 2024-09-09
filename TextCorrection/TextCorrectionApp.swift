@@ -337,9 +337,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showTextWindow(text: String) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
         
-        // 設定視窗大小為螢幕的 50%
+        // 設定視窗大小為螢幕的 50% 寬度和 40% 高度
         let width = screenFrame.width * 0.5
-        let height = screenFrame.height * 0.5
+        let height = screenFrame.height * 0.4
         let size = NSSize(width: width, height: height)
         
         // 計算視窗位置，使其位於畫面正中央
@@ -367,7 +367,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             textWindow?.contentView = visualEffect
             textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.6) ?? .black.withAlphaComponent(0.6)
             
-            textWindow?.minSize = NSSize(width: 400, height: 300)
+            textWindow?.minSize = NSSize(width: 400, height: 250)
             textWindow?.isOpaque = false
             textWindow?.hasShadow = true
             textWindow?.appearance = NSAppearance(named: .darkAqua)
@@ -567,29 +567,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 添加視窗大小變化的監聽器
         NotificationCenter.default.addObserver(self, selector: #selector(windowDidResize(_:)), name: NSWindow.didResizeNotification, object: textWindow)
 
-        // 添加調試代碼
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            print("mainArea frame: \(mainArea.frame)")
-            print("textContainer frame: \(textContainer.frame)")
-            print("scrollView frame: \(scrollView.frame)")
-            print("textView frame: \(textView.frame)")
-        }
-
         // 設置 textView 的框架大小
         textView.frame = scrollView.bounds
         scrollView.documentView = textView
 
-        // 驗證字體加載
-        for family in NSFontManager.shared.availableFontFamilies {
-            print("Font family: \(family)")
-            for font in NSFontManager.shared.availableMembers(ofFontFamily: family) ?? [] {
-                print("  - \(font[0])")
-            }
-        }
-
         // 設置字體
         textView.font = self.customFont
-        print("成功設置自定義字體：\(self.customFont.fontName)")
 
         rewriteText()  // 自動開始重寫
     }
@@ -636,12 +619,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         mainArea.layoutSubtreeIfNeeded()
         
-        // 打印調試信息
-        print("Adjusted heights - textView: \(textView.frame.height), textContainer: \(textContainer.frame.height), mainArea: \(mainArea.frame.height)")
-
         // 確保字體正確應用
         textView.font = self.customFont
-        print("當前應用的字體：\(textView.font?.fontName ?? "Unknown")")
     }
 
     @objc func rewriteText() {
