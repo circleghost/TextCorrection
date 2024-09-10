@@ -42,7 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
        - emoji 或特殊符號是為了增加閱讀體驗，也不必調整。
     3. 請保留原文的段落和換行格式
     4. 請不要使用額外的 Markdown 語法。
-    5. 請仔細審視給定的文字，將冗詞語法錯誤進行��改。
+    5. 請仔細審視給定的文字，將冗詞語法錯誤進行改。
     6. 返回文字不要帶有 <text> 標籤。
     """
 
@@ -71,7 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func loadApiKey() {
         if let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] {
             print("API Key loaded: \(apiKey.prefix(5))...") // 只打印前5個字符，以保護密鑰
-            self.openAIService = OpenAIService(apiKey: apiKey, systemPrompt: systemPrompt)
+            self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: systemPrompt)
         } else {
             print("警告：未找到 OPENAI_API_KEY 環境變數")
             DispatchQueue.main.async {
