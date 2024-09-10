@@ -28,13 +28,21 @@ class TextWindowManager {
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
         appDelegate.textWindow = NSPanel(contentRect: adjustedFrame,
-                         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                         backing: .buffered, defer: false)
-        appDelegate.textWindow?.title = "AI 潤飾"
+                     styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                     backing: .buffered, defer: false)
+        appDelegate.textWindow?.title = ""
         appDelegate.textWindow?.titlebarAppearsTransparent = true
         appDelegate.textWindow?.isMovableByWindowBackground = true
         appDelegate.textWindow?.contentView?.wantsLayer = true
-        appDelegate.textWindow?.contentView?.layer?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.2).cgColor
+
+        // 添加漸變背景
+        let gradient = CAGradientLayer()
+        gradient.frame = (appDelegate.textWindow?.contentView?.bounds)!
+        gradient.colors = [NSColor(red: 0.1, green: 0.1, blue: 0.15, alpha: 0.9).cgColor,
+                           NSColor(red: 0.15, green: 0.15, blue: 0.2, alpha: 0.9).cgColor]
+        gradient.locations = [0.0, 1.0]
+        appDelegate.textWindow?.contentView?.layer?.addSublayer(gradient)
+
         appDelegate.textWindow?.isOpaque = false
         appDelegate.textWindow?.backgroundColor = .clear
         appDelegate.textWindow?.hasShadow = true
@@ -44,25 +52,20 @@ class TextWindowManager {
         
         // 設置標題字體和大小
         if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
-            appDelegate.textWindow?.standardWindowButton(.closeButton)?.superview?.subviews.forEach { $0.removeFromSuperview() }
-            appDelegate.textWindow?.title = "AI 潤飾"
             appDelegate.textWindow?.titleVisibility = .visible
             appDelegate.textWindow?.titlebarAppearsTransparent = false
             appDelegate.textWindow?.styleMask.insert(.titled)
-            appDelegate.textWindow?.standardWindowButton(.closeButton)?.superview?.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
             
             if let titleView = appDelegate.textWindow?.standardWindowButton(.closeButton)?.superview {
                 titleView.wantsLayer = true
                 titleView.layer?.backgroundColor = NSColor(hexString: "#1E1E26")?.cgColor
                 
-                let titleLabel = NSTextField(frame: NSRect(x: 0, y: 0, width: titleView.frame.width, height: titleView.frame.height))
-                titleLabel.stringValue = "AI 潤飾"
-                titleLabel.alignment = .center
+                let titleLabel = NSTextField(labelWithString: "AI 潤飾")
                 titleLabel.font = titleFont
                 titleLabel.textColor = .white
-                titleLabel.isBezeled = false
-                titleLabel.isEditable = false
-                titleLabel.drawsBackground = false
+                titleLabel.alignment = .center
+                titleLabel.backgroundColor = .clear
+                titleLabel.isBordered = false
                 titleView.addSubview(titleLabel)
                 
                 titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -105,8 +108,12 @@ class TextWindowManager {
         let textContainer = NSView()
         textContainer.translatesAutoresizingMaskIntoConstraints = false
         textContainer.wantsLayer = true
-        textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.withAlphaComponent(0.95).cgColor
-        textContainer.layer?.cornerRadius = 10
+        textContainer.layer?.backgroundColor = NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8).cgColor
+        textContainer.layer?.cornerRadius = 20
+        textContainer.layer?.shadowColor = NSColor.black.withAlphaComponent(0.3).cgColor
+        textContainer.layer?.shadowOffset = CGSize(width: 0, height: 2)
+        textContainer.layer?.shadowRadius = 5
+        textContainer.layer?.shadowOpacity = 1
         textContainer.identifier = NSUserInterfaceItemIdentifier("textContainer")
         mainArea.addSubview(textContainer)
 
@@ -127,7 +134,7 @@ class TextWindowManager {
         textView.isRichText = true // 允許富文本
         scrollView.documentView = textView
 
-        // 統計信息
+        // 統信息
         let statsContainer = NSView()
         statsContainer.translatesAutoresizingMaskIntoConstraints = false
         mainArea.addSubview(statsContainer)
@@ -137,7 +144,7 @@ class TextWindowManager {
         statsView.isEditable = false
         statsView.isBordered = false
         statsView.backgroundColor = .clear
-        statsView.textColor = NSColor(hexString: "#727178") ?? .lightGray
+        statsView.textColor = NSColor.lightGray
         statsView.font = NSFont.systemFont(ofSize: 12)
         statsView.stringValue = ""
         statsView.lineBreakMode = .byTruncatingTail
@@ -148,7 +155,7 @@ class TextWindowManager {
         shortcutView.isEditable = false
         shortcutView.isBordered = false
         shortcutView.backgroundColor = .clear
-        shortcutView.textColor = NSColor(hexString: "#727178") ?? .lightGray
+        shortcutView.textColor = NSColor.lightGray
         shortcutView.font = NSFont.systemFont(ofSize: 12)
         shortcutView.stringValue = "複製文字 ⌘+C"
         shortcutView.alignment = .right
@@ -161,33 +168,28 @@ class TextWindowManager {
         bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.withAlphaComponent(0.95).cgColor
         contentView.addSubview(bottomArea)
 
-        // 複製並貼上按鈕和 Enter 符號容器
         let actionContainer = NSView()
         actionContainer.translatesAutoresizingMaskIntoConstraints = false
+        actionContainer.wantsLayer = true
+        actionContainer.layer?.backgroundColor = NSColor(white: 0.3, alpha: 1.0).cgColor
+        actionContainer.layer?.cornerRadius = 10
         bottomArea.addSubview(actionContainer)
 
-        let copyButton = NSButton()
+        let copyButton = NSButton(title: "複製並貼上", target: appDelegate, action: #selector(appDelegate.copyAndPasteRewrittenText))
         copyButton.translatesAutoresizingMaskIntoConstraints = false
-        copyButton.title = "複製並貼上"
         copyButton.bezelStyle = .inline
         copyButton.isBordered = false
-        copyButton.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        copyButton.target = appDelegate
-        copyButton.action = #selector(appDelegate.copyAndPasteRewrittenText)
+        copyButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
         copyButton.contentTintColor = .white
         actionContainer.addSubview(copyButton)
 
-        let enterSymbolContainer = NSButton()
-        enterSymbolContainer.translatesAutoresizingMaskIntoConstraints = false
-        enterSymbolContainer.wantsLayer = true
-        enterSymbolContainer.layer?.backgroundColor = NSColor(hexString: "#3B3A42")?.cgColor
-        enterSymbolContainer.layer?.cornerRadius = 5
-        enterSymbolContainer.target = appDelegate
-        enterSymbolContainer.action = #selector(appDelegate.copyAndPasteRewrittenText)
-        enterSymbolContainer.title = "⏎"
-        enterSymbolContainer.font = NSFont.systemFont(ofSize: 16)
-        enterSymbolContainer.contentTintColor = .white
-        actionContainer.addSubview(enterSymbolContainer)
+        let enterSymbol = NSTextField(labelWithString: "⏎")
+        enterSymbol.translatesAutoresizingMaskIntoConstraints = false
+        enterSymbol.font = NSFont.systemFont(ofSize: 16)
+        enterSymbol.textColor = .white
+        enterSymbol.backgroundColor = .clear
+        enterSymbol.isBordered = false
+        actionContainer.addSubview(enterSymbol)
 
         // 設置約束
         NSLayoutConstraint.activate([
@@ -234,14 +236,15 @@ class TextWindowManager {
 
             actionContainer.trailingAnchor.constraint(equalTo: bottomArea.trailingAnchor, constant: -20),
             actionContainer.centerYAnchor.constraint(equalTo: bottomArea.centerYAnchor),
+            actionContainer.heightAnchor.constraint(equalToConstant: 36),
+            actionContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
 
-            copyButton.trailingAnchor.constraint(equalTo: enterSymbolContainer.leadingAnchor, constant: -10),
+            copyButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor, constant: 10),
             copyButton.centerYAnchor.constraint(equalTo: actionContainer.centerYAnchor),
+            copyButton.trailingAnchor.constraint(equalTo: enterSymbol.leadingAnchor, constant: -5),
 
-            enterSymbolContainer.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
-            enterSymbolContainer.centerYAnchor.constraint(equalTo: actionContainer.centerYAnchor),
-            enterSymbolContainer.widthAnchor.constraint(equalToConstant: 30),
-            enterSymbolContainer.heightAnchor.constraint(equalToConstant: 30),
+            enterSymbol.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor, constant: -10),
+            enterSymbol.centerYAnchor.constraint(equalTo: actionContainer.centerYAnchor),
         ])
         
         appDelegate.textWindow?.makeKeyAndOrderFront(nil)
