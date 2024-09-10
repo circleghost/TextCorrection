@@ -1,11 +1,11 @@
 import Foundation
 
 class OpenAIService {
-    private let apiKey: String
+    private let apiKeyProvider: () -> String
     private let systemPrompt: String
     
-    init(apiKey: String, systemPrompt: String) {
-        self.apiKey = apiKey
+    init(apiKeyProvider: @escaping () -> String, systemPrompt: String) {
+        self.apiKeyProvider = apiKeyProvider
         self.systemPrompt = systemPrompt
     }
     
@@ -27,7 +27,7 @@ class OpenAIService {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
         urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.addValue("Bearer \(apiKeyProvider())", forHTTPHeaderField: "Authorization")
 
         let encoder = JSONEncoder()
         do {
