@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>此應用程序需要使用 AppleScript 來檢測文字選擇。</string>
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIconFile</key>
+    <string></string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -22,23 +22,22 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-    <key>NSAccessibilityUsageDescription</key>
-    <string>此應用程序需要訪問輔助功能以檢測文字選擇。</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2024 Your Name. All rights reserved.</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>This app needs to control other applications to enable its text correction features.</string>
+    <key>NSPasteboardUsageDescription</key>
+    <string>This app needs access to the pasteboard to read and write text.</string>
     <key>LSUIElement</key>
     <true/>
-    <key>NSPasteboardUsageDescription</key>
-    <string>此應用程序需要訪問剪貼板以檢測選中的文字。</string>
-    <key>NSDesktopFolderUsageDescription</key>
-    <string>此應用程式需要存取桌面資料夾以保存和讀取文件。</string>
-    <key>NSDocumentsFolderUsageDescription</key>
-    <string>此應用程式需要存取文件資料夾以保存和讀取文件。</string>
-    <key>NSSupportsAutomaticTermination</key>
-    <false/>
-    <key>NSSupportsSuddenTermination</key>
-    <true/>
-    <key>com.apple.security.temporary-exception.apple-events</key>
-    <array>
-        <string>com.apple.systemevents</string>
-    </array>
+    <key>NSMainStoryboardFile</key>
+    <string>Main</string>
 </dict>
 </plist>

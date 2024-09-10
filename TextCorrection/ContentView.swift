@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+// 添加這個擴展來定義自定義通知名稱
+extension Notification.Name {
+    static let didSelectText = Notification.Name("didSelectText")
+}
+
 struct ContentView: View {
     @State private var selectedText: String = ""
     @State private var showPopup: Bool = false

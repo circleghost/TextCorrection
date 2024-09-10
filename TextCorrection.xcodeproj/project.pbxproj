@@ -10,6 +10,19 @@
 		4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
+		47826FBA2C8F5A4500D2D8F4 /* OpenAIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */; };
+		47826FBB2C8F5A4500D2D8F4 /* TextCorrectionError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */; };
+		47826FBC2C8F5A4500D2D8F4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */; };
+		47826FBD2C8F5A4500D2D8F4 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB12C8F5A4400D2D8F4 /* OpenAIService.swift */; };
+		47826FBE2C8F5A4500D2D8F4 /* TextProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB22C8F5A4400D2D8F4 /* TextProcessing.swift */; };
+		47826FBF2C8F5A4500D2D8F4 /* AccessibilityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB32C8F5A4400D2D8F4 /* AccessibilityManager.swift */; };
+		47826FC02C8F5A4500D2D8F4 /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB42C8F5A4500D2D8F4 /* Utilities.swift */; };
+		47826FC12C8F5A4500D2D8F4 /* TextWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB52C8F5A4500D2D8F4 /* TextWindowManager.swift */; };
+		47826FC22C8F5A4500D2D8F4 /* StatusItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB62C8F5A4500D2D8F4 /* StatusItemManager.swift */; };
+		47826FC32C8F5A4500D2D8F4 /* PasteboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB72C8F5A4500D2D8F4 /* PasteboardManager.swift */; };
+		47826FC42C8F5A4500D2D8F4 /* NSColorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB82C8F5A4500D2D8F4 /* NSColorExtension.swift */; };
+		47826FC52C8F5A4500D2D8F4 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB92C8F5A4500D2D8F4 /* HotKeyManager.swift */; };
+		47826FC72C8F616100D2D8F4 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 47826FC62C8F616100D2D8F4 /* Info.plist */; };
 		478434202C8C38D500456192 /* TextCorrectionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784341F2C8C38D500456192 /* TextCorrectionApp.swift */; };
 		478434222C8C38D500456192 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478434212C8C38D500456192 /* ContentView.swift */; };
 		478434242C8C38D700456192 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 478434232C8C38D700456192 /* Assets.xcassets */; };
@@ -42,6 +55,19 @@
 
 /* Begin PBXFileReference section */
 		4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "仓耳今楷01-W05.ttf"; sourceTree = "<group>"; };
+		47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenAIModels.swift; sourceTree = "<group>"; };
+		47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextCorrectionError.swift; sourceTree = "<group>"; };
+		47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		47826FB12C8F5A4400D2D8F4 /* OpenAIService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		47826FB22C8F5A4400D2D8F4 /* TextProcessing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextProcessing.swift; sourceTree = "<group>"; };
+		47826FB32C8F5A4400D2D8F4 /* AccessibilityManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AccessibilityManager.swift; sourceTree = "<group>"; };
+		47826FB42C8F5A4500D2D8F4 /* Utilities.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
+		47826FB52C8F5A4500D2D8F4 /* TextWindowManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextWindowManager.swift; sourceTree = "<group>"; };
+		47826FB62C8F5A4500D2D8F4 /* StatusItemManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StatusItemManager.swift; sourceTree = "<group>"; };
+		47826FB72C8F5A4500D2D8F4 /* PasteboardManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PasteboardManager.swift; sourceTree = "<group>"; };
+		47826FB82C8F5A4500D2D8F4 /* NSColorExtension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NSColorExtension.swift; sourceTree = "<group>"; };
+		47826FB92C8F5A4500D2D8F4 /* HotKeyManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		47826FC62C8F616100D2D8F4 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = SOURCE_ROOT; };
 		4784341C2C8C38D500456192 /* TextCorrection.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TextCorrection.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4784341F2C8C38D500456192 /* TextCorrectionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextCorrectionApp.swift; sourceTree = "<group>"; };
 		478434212C8C38D500456192 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -107,6 +133,19 @@
 		4784341E2C8C38D500456192 /* TextCorrection */ = {
 			isa = PBXGroup;
 			children = (
+				47826FC62C8F616100D2D8F4 /* Info.plist */,
+				47826FB32C8F5A4400D2D8F4 /* AccessibilityManager.swift */,
+				47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */,
+				47826FB92C8F5A4500D2D8F4 /* HotKeyManager.swift */,
+				47826FB82C8F5A4500D2D8F4 /* NSColorExtension.swift */,
+				47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */,
+				47826FB12C8F5A4400D2D8F4 /* OpenAIService.swift */,
+				47826FB72C8F5A4500D2D8F4 /* PasteboardManager.swift */,
+				47826FB62C8F5A4500D2D8F4 /* StatusItemManager.swift */,
+				47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */,
+				47826FB22C8F5A4400D2D8F4 /* TextProcessing.swift */,
+				47826FB52C8F5A4500D2D8F4 /* TextWindowManager.swift */,
+				47826FB42C8F5A4500D2D8F4 /* Utilities.swift */,
 				4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */,
 				4784341F2C8C38D500456192 /* TextCorrectionApp.swift */,
 				478434212C8C38D500456192 /* ContentView.swift */,
@@ -260,6 +299,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47826FC72C8F616100D2D8F4 /* Info.plist in Resources */,
 				478434272C8C38D700456192 /* Preview Assets.xcassets in Resources */,
 				478434242C8C38D700456192 /* Assets.xcassets in Resources */,
 				4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */,
@@ -289,8 +329,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47826FC42C8F5A4500D2D8F4 /* NSColorExtension.swift in Sources */,
+				47826FBF2C8F5A4500D2D8F4 /* AccessibilityManager.swift in Sources */,
 				478434222C8C38D500456192 /* ContentView.swift in Sources */,
 				478434202C8C38D500456192 /* TextCorrectionApp.swift in Sources */,
+				47826FBA2C8F5A4500D2D8F4 /* OpenAIModels.swift in Sources */,
+				47826FC12C8F5A4500D2D8F4 /* TextWindowManager.swift in Sources */,
+				47826FBE2C8F5A4500D2D8F4 /* TextProcessing.swift in Sources */,
+				47826FC32C8F5A4500D2D8F4 /* PasteboardManager.swift in Sources */,
+				47826FBC2C8F5A4500D2D8F4 /* AppDelegate.swift in Sources */,
+				47826FC22C8F5A4500D2D8F4 /* StatusItemManager.swift in Sources */,
+				47826FC02C8F5A4500D2D8F4 /* Utilities.swift in Sources */,
+				47826FBB2C8F5A4500D2D8F4 /* TextCorrectionError.swift in Sources */,
+				47826FBD2C8F5A4500D2D8F4 /* OpenAIService.swift in Sources */,
+				47826FC52C8F5A4500D2D8F4 /* HotKeyManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
