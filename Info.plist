@@ -6,8 +6,6 @@
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
-    <key>CFBundleIconFile</key>
-    <string></string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -32,12 +30,10 @@
         <true/>
     </dict>
     <key>NSAppleEventsUsageDescription</key>
-    <string>This app needs to control other applications to enable its text correction features.</string>
+    <string>此應用程序需要控制其他應用程序以啟用其文本糾正功能。</string>
     <key>NSPasteboardUsageDescription</key>
-    <string>This app needs access to the pasteboard to read and write text.</string>
+    <string>此應用程序需要訪問剪貼板以讀取和寫入文本。</string>
     <key>LSUIElement</key>
     <true/>
-    <key>NSMainStoryboardFile</key>
-    <string>Main</string>
 </dict>
 </plist>

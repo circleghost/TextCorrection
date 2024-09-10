@@ -24,6 +24,7 @@
 		47826FC52C8F5A4500D2D8F4 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB92C8F5A4500D2D8F4 /* HotKeyManager.swift */; };
 		47826FC72C8F616100D2D8F4 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 47826FC62C8F616100D2D8F4 /* Info.plist */; };
 		47826FCA2C901C7B00D2D8F4 /* Differ in Frameworks */ = {isa = PBXBuildFile; productRef = 47826FC92C901C7B00D2D8F4 /* Differ */; };
+		47826FCD2C90317A00D2D8F4 /* PythonKit in Frameworks */ = {isa = PBXBuildFile; productRef = 47826FCC2C90317A00D2D8F4 /* PythonKit */; };
 		478434202C8C38D500456192 /* TextCorrectionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4784341F2C8C38D500456192 /* TextCorrectionApp.swift */; };
 		478434222C8C38D500456192 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478434212C8C38D500456192 /* ContentView.swift */; };
 		478434242C8C38D700456192 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 478434232C8C38D700456192 /* Assets.xcassets */; };
@@ -90,6 +91,7 @@
 				47C086332C8DB15700030313 /* DifferenceKit in Frameworks */,
 				47826FCA2C901C7B00D2D8F4 /* Differ in Frameworks */,
 				47C086302C8CC27D00030313 /* HotKey in Frameworks */,
+				47826FCD2C90317A00D2D8F4 /* PythonKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -203,6 +205,7 @@
 				47C0862F2C8CC27D00030313 /* HotKey */,
 				47C086322C8DB15700030313 /* DifferenceKit */,
 				47826FC92C901C7B00D2D8F4 /* Differ */,
+				47826FCC2C90317A00D2D8F4 /* PythonKit */,
 			);
 			productName = TextCorrection;
 			productReference = 4784341C2C8C38D500456192 /* TextCorrection.app */;
@@ -286,6 +289,7 @@
 				47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */,
 				47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */,
 				47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */,
+				47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */,
 			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
@@ -677,6 +681,14 @@
 				minimumVersion = 1.4.6;
 			};
 		};
+		47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pvieito/PythonKit.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soffes/HotKey";
@@ -700,6 +712,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */;
 			productName = Differ;
+		};
+		47826FCC2C90317A00D2D8F4 /* PythonKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */;
+			productName = PythonKit;
 		};
 		47C0862F2C8CC27D00030313 /* HotKey */ = {
 			isa = XCSwiftPackageProductDependency;

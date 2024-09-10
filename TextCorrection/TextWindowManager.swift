@@ -1,5 +1,4 @@
 import Cocoa
-import Differ
 
 class TextWindowManager {
     weak var appDelegate: AppDelegate?
@@ -29,25 +28,19 @@ class TextWindowManager {
         let adjustedFrame = screenFrame.intersection(windowFrame)
         
         appDelegate.textWindow = NSPanel(contentRect: adjustedFrame,
-                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-                             backing: .buffered, defer: false)
+                         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                         backing: .buffered, defer: false)
         appDelegate.textWindow?.title = "AI 潤飾"
-        appDelegate.textWindow?.titlebarAppearsTransparent = false
+        appDelegate.textWindow?.titlebarAppearsTransparent = true
         appDelegate.textWindow?.isMovableByWindowBackground = true
-        
-        // 添加霧化效果
-        let visualEffect = NSVisualEffectView(frame: adjustedFrame)
-        visualEffect.material = .windowBackground
-        visualEffect.state = .active
-        visualEffect.blendingMode = .behindWindow
-        
-        appDelegate.textWindow?.contentView = visualEffect
-        appDelegate.textWindow?.backgroundColor = NSColor(hexString: "#1E1E26")?.withAlphaComponent(0.6) ?? .black.withAlphaComponent(0.6)
-        
-        appDelegate.textWindow?.minSize = NSSize(width: 400, height: 250)
+        appDelegate.textWindow?.contentView?.wantsLayer = true
+        appDelegate.textWindow?.contentView?.layer?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.2).cgColor
         appDelegate.textWindow?.isOpaque = false
+        appDelegate.textWindow?.backgroundColor = .clear
         appDelegate.textWindow?.hasShadow = true
         appDelegate.textWindow?.appearance = NSAppearance(named: .darkAqua)
+        
+        appDelegate.textWindow?.minSize = NSSize(width: 400, height: 250)
         
         // 設置標題字體和大小
         if let titleFont = NSFont(name: "Yuanti TC", size: 18) {
@@ -86,20 +79,33 @@ class TextWindowManager {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         appDelegate.textWindow?.contentView?.addSubview(contentView)
 
-        // 移除所有現有的子視圖
-        contentView.subviews.forEach { $0.removeFromSuperview() }
+        let visualEffectView = NSVisualEffectView(frame: contentView.bounds)
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.state = .active
+        visualEffectView.material = .hudWindow
+        contentView.addSubview(visualEffectView)
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            visualEffectView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            visualEffectView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
 
         // 主要區域
         let mainArea = NSView()
         mainArea.translatesAutoresizingMaskIntoConstraints = false
         mainArea.identifier = NSUserInterfaceItemIdentifier("mainArea")
+        mainArea.wantsLayer = true
+        mainArea.layer?.backgroundColor = NSColor.clear.cgColor
         contentView.addSubview(mainArea)
 
         // 文字區域（圓角）
         let textContainer = NSView()
         textContainer.translatesAutoresizingMaskIntoConstraints = false
         textContainer.wantsLayer = true
-        textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.cgColor
+        textContainer.layer?.backgroundColor = NSColor(hexString: "#2B2B35")?.withAlphaComponent(0.95).cgColor
         textContainer.layer?.cornerRadius = 10
         textContainer.identifier = NSUserInterfaceItemIdentifier("textContainer")
         mainArea.addSubview(textContainer)
@@ -152,7 +158,7 @@ class TextWindowManager {
         let bottomArea = NSView()
         bottomArea.translatesAutoresizingMaskIntoConstraints = false
         bottomArea.wantsLayer = true
-        bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.cgColor
+        bottomArea.layer?.backgroundColor = NSColor(hexString: "#28252E")?.withAlphaComponent(0.95).cgColor
         contentView.addSubview(bottomArea)
 
         // 複製並貼上按鈕和 Enter 符號容器
@@ -279,27 +285,46 @@ class TextWindowManager {
 
     // 修改這個方法
     func updateTextViewWithDiff(originalText: String, newText: String, textView: NSTextView) {
-        let diff = originalText.diff(newText)
         let attributedString = NSMutableAttributedString()
-
-        for change in diff {
+        
+        let diff = TextProcessing.diffStrings(originalText, newText)
+        
+        // 合併相鄰的相同類型的變更
+        let mergedDiff = diff.reduce(into: [TextProcessing.DiffChange]()) { result, change in
+            if case .equal(let text) = change, let last = result.last, case .equal(let prevText) = last {
+                result[result.count - 1] = .equal(prevText + text)
+            } else if case .insert(let text) = change, let last = result.last, case .insert(let prevText) = last {
+                result[result.count - 1] = .insert(prevText + text)
+            } else if case .delete(let text) = change, let last = result.last, case .delete(let prevText) = last {
+                result[result.count - 1] = .delete(prevText + text)
+            } else {
+                result.append(change)
+            }
+        }
+        
+        // 使用合併後的差異重新生成 attributedString
+        for change in mergedDiff {
             switch change {
-            case .insert(let element):
+            case .equal(let text):
+                attributedString.append(NSAttributedString(string: text))
+            case .insert(let text):
                 let attributes: [NSAttributedString.Key: Any] = [
                     .foregroundColor: NSColor.green,
                     .backgroundColor: NSColor.green.withAlphaComponent(0.2)
                 ]
-                attributedString.append(NSAttributedString(string: String(element), attributes: attributes))
-            case .delete(let element):
+                attributedString.append(NSAttributedString(string: text, attributes: attributes))
+            case .delete(let text):
                 let attributes: [NSAttributedString.Key: Any] = [
                     .foregroundColor: NSColor.red,
                     .backgroundColor: NSColor.red.withAlphaComponent(0.2),
                     .strikethroughStyle: NSUnderlineStyle.single.rawValue
                 ]
-                attributedString.append(NSAttributedString(string: String(element), attributes: attributes))
+                attributedString.append(NSAttributedString(string: text, attributes: attributes))
             }
         }
-
-        textView.textStorage?.setAttributedString(attributedString)
+        
+        DispatchQueue.main.async {
+            textView.textStorage?.setAttributedString(attributedString)
+        }
     }
 }
