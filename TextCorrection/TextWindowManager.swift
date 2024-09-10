@@ -1,4 +1,5 @@
 import Cocoa
+import Differ
 
 class TextWindowManager {
     weak var appDelegate: AppDelegate?
@@ -109,14 +110,15 @@ class TextWindowManager {
         scrollView.drawsBackground = false
         textContainer.addSubview(scrollView)
 
+        // 修改 textView 的設置
         let textView = NSTextView(frame: scrollView.bounds)
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.string = text
         textView.isEditable = false
-        textView.textContainerInset = NSSize(width: 15, height: 15)  // 增加內邊距
+        textView.textContainerInset = NSSize(width: 15, height: 15)
         textView.backgroundColor = NSColor.clear
         textView.textColor = NSColor.white
         textView.alignment = .left
+        textView.isRichText = true // 允許富文本
         scrollView.documentView = textView
 
         // 統計信息
@@ -273,5 +275,31 @@ class TextWindowManager {
             }
             return event
         }
+    }
+
+    // 修改這個方法
+    func updateTextViewWithDiff(originalText: String, newText: String, textView: NSTextView) {
+        let diff = originalText.diff(newText)
+        let attributedString = NSMutableAttributedString()
+
+        for change in diff {
+            switch change {
+            case .insert(let element):
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .foregroundColor: NSColor.green,
+                    .backgroundColor: NSColor.green.withAlphaComponent(0.2)
+                ]
+                attributedString.append(NSAttributedString(string: String(element), attributes: attributes))
+            case .delete(let element):
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .foregroundColor: NSColor.red,
+                    .backgroundColor: NSColor.red.withAlphaComponent(0.2),
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue
+                ]
+                attributedString.append(NSAttributedString(string: String(element), attributes: attributes))
+            }
+        }
+
+        textView.textStorage?.setAttributedString(attributedString)
     }
 }
