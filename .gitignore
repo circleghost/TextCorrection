@@ -20,3 +20,7 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 .build/
+# 忽略 Xcode 的共享 scheme
+*.xcscheme
+xcuserdata/
+
