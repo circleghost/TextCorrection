@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		474CD3F42C92D0D900D3BD66 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = 474CD3F32C92D0D900D3BD66 /* KeychainAccess */; };
 		4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
@@ -92,6 +93,7 @@
 				47826FCA2C901C7B00D2D8F4 /* Differ in Frameworks */,
 				47C086302C8CC27D00030313 /* HotKey in Frameworks */,
 				47826FCD2C90317A00D2D8F4 /* PythonKit in Frameworks */,
+				474CD3F42C92D0D900D3BD66 /* KeychainAccess in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -206,6 +208,7 @@
 				47C086322C8DB15700030313 /* DifferenceKit */,
 				47826FC92C901C7B00D2D8F4 /* Differ */,
 				47826FCC2C90317A00D2D8F4 /* PythonKit */,
+				474CD3F32C92D0D900D3BD66 /* KeychainAccess */,
 			);
 			productName = TextCorrection;
 			productReference = 4784341C2C8C38D500456192 /* TextCorrection.app */;
@@ -290,6 +293,7 @@
 				47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */,
 				47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */,
 				47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */,
+				474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
 			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
@@ -673,6 +677,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tonyarnold/Differ";
@@ -708,6 +720,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		474CD3F32C92D0D900D3BD66 /* KeychainAccess */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
+			productName = KeychainAccess;
+		};
 		47826FC92C901C7B00D2D8F4 /* Differ */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */;

@@ -74,4 +74,19 @@ class OpenAIService {
         print("成功獲取重寫後的文字，總長度：\(fullContent.count)")
         print("API 完整回應：\n\(fullContent)")
     }
+    
+    func testApiKey() async throws -> Bool {
+        let url = URL(string: "https://api.openai.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("Bearer \(apiKeyProvider())", forHTTPHeaderField: "Authorization")
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            return httpResponse.statusCode == 200
+        }
+        
+        return false
+    }
 }

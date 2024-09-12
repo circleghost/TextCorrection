@@ -2,6 +2,7 @@ import Cocoa
 import SwiftUI
 import Carbon
 import HotKey
+import KeychainAccess
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItemManager: StatusItemManager!
@@ -65,18 +66,117 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         textWindowManager = TextWindowManager(appDelegate: self)
         
-        loadApiKey()
+        DispatchQueue.main.async {
+            self.showApiKeyInputWindow()
+        }
     }
 
     private func loadApiKey() {
-        if let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] {
-            print("API Key loaded: \(apiKey.prefix(5))...") // 只打印前5個字符，以保護密鑰
-            self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: systemPrompt)
+        if let storedApiKey = getStoredApiKey() {
+            testAndUseApiKey(storedApiKey)
         } else {
-            print("警告：未找到 OPENAI_API_KEY 環境變數")
             DispatchQueue.main.async {
-                self.showErrorAlert(message: "未找到 OpenAI API 金鑰，請設置 OPENAI_API_KEY 環境變數")
+                self.showApiKeyInputWindow()
             }
+        }
+    }
+
+    private func getStoredApiKey() -> String? {
+        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+        return try? keychain.get("OpenAIApiKey")
+    }
+
+    private func testAndUseApiKey(_ apiKey: String) {
+        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+        
+        Task {
+            do {
+                let testResult = try await testService.testApiKey()
+                if testResult {
+                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+                    print("已成功載入儲存的 API 金鑰")
+                } else {
+                    DispatchQueue.main.async {
+                        self.showApiKeyInputWindow()
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.showApiKeyInputWindow()
+                }
+            }
+        }
+    }
+
+    private func showApiKeyInputWindow() {
+        let alert = NSAlert()
+        alert.messageText = "請輸入 OpenAI API 金鑰"
+        alert.informativeText = "您的 API 金鑰將被安全地儲存在系統鑰匙圈中。"
+        alert.alertStyle = .informational
+        
+        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        alert.accessoryView = inputTextField
+        
+        alert.addButton(withTitle: "確定")
+        alert.addButton(withTitle: "取消")
+        
+        let response = alert.runModal()
+        
+        if response == .alertFirstButtonReturn {
+            let apiKey = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                testAndSaveApiKey(apiKey)
+            } else {
+                self.showErrorAlert(message: "API 金鑰不能為空")
+            }
+        } else {
+            print("使用者取消了 API 金鑰輸入")
+        }
+    }
+
+    private func testAndSaveApiKey(_ apiKey: String) {
+        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+        
+        Task {
+            do {
+                let testResult = try await testService.testApiKey()
+                if testResult {
+                    self.saveApiKey(apiKey)
+                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+                    DispatchQueue.main.async {
+                        self.showSuccessAlert(message: "API 金鑰驗證成功並已儲存")
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.showErrorAlert(message: "API 金鑰無效，請檢查後重試")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.showErrorAlert(message: "測試 API 金鑰時發生錯誤：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func showSuccessAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "成功"
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "確定")
+        alert.runModal()
+    }
+
+    private func saveApiKey(_ apiKey: String) {
+        // 這裡使用 KeychainAccess 庫來安全地儲存 API 金鑰
+        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+        do {
+            try keychain.set(apiKey, key: "OpenAIApiKey")
+            print("API 金鑰已成功儲存")
+        } catch {
+            print("儲存 API 金鑰時發生錯誤：\(error)")
+            self.showErrorAlert(message: "無法儲存 API 金鑰：\(error.localizedDescription)")
         }
     }
 
@@ -88,7 +188,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func showPreferences() {
+    @objc func showPreferences() {
         // 顯示偏好設置視窗
         print("顯示偏好設置視窗")
     }
@@ -321,9 +421,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cmdUp?.post(tap: .cghidEventTap)
         
         DispatchQueue.main.async {
-            self.copyButton?.title = "已複製並貼上"
+            let buttonTitle = "已複製並貼上"
+            let attributedString = NSMutableAttributedString(string: buttonTitle)
+            
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.white,
+                .strokeColor: NSColor.gray,
+                .strokeWidth: -1.0
+            ]
+            
+            attributedString.addAttributes(attributes, range: NSRange(location: 0, length: buttonTitle.count))
+            
+            self.copyButton?.attributedTitle = attributedString
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                self.copyButton?.title = "複製並貼上"
+                let originalTitle = "複製並貼上"
+                let originalAttributedString = NSMutableAttributedString(string: originalTitle)
+                originalAttributedString.addAttributes(attributes, range: NSRange(location: 0, length: originalTitle.count))
+                self.copyButton?.attributedTitle = originalAttributedString
             }
         }
     }
@@ -333,7 +449,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let changesCount = calculateChanges(rewritten: rewrittenText)
         
         DispatchQueue.main.async {
-            self.statsView?.stringValue = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4o-mini"
+            let statsString = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4o-mini"
+            let attributedString = NSMutableAttributedString(string: statsString)
+            
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.white,
+                .strokeColor: NSColor.gray,
+                .strokeWidth: -1.0
+            ]
+            
+            attributedString.addAttributes(attributes, range: NSRange(location: 0, length: statsString.count))
+            
+            self.statsView?.attributedStringValue = attributedString
         }
     }
 
