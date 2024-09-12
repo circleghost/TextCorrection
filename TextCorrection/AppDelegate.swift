@@ -43,10 +43,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
        - emoji 或特殊符號是為了增加閱讀體驗，也不必調整。
     3. 請保留原文的段落和換行格式
     4. 請不要使用額外的 Markdown 語法。
-    5. 請仔細審視給定的文字，將冗詞語法錯誤進行改。
+    5. 請仔細審視給定的文字，冗語法錯誤進行改
     6. 返回文字不要帶有 <text> 標籤。
     """
 
+    private var isApiKeyValid: Bool = false
+
+    var settingsWindow: SettingsWindow?
+    var settingsButton: NSButton?
+    
     override init() {
         self.customFont = NSFont(name: "Yuanti TC", size: 19) ?? NSFont.systemFont(ofSize: 19)
         super.init()
@@ -66,13 +71,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         textWindowManager = TextWindowManager(appDelegate: self)
         
-        DispatchQueue.main.async {
-            self.showApiKeyInputWindow()
-        }
+        loadApiKey()
+        
+        setupSettingsButton()
     }
 
     private func loadApiKey() {
-        if let storedApiKey = getStoredApiKey() {
+        if let storedApiKey = self.getStoredApiKey() {
             testAndUseApiKey(storedApiKey)
         } else {
             DispatchQueue.main.async {
@@ -81,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func getStoredApiKey() -> String? {
+    public func getStoredApiKey() -> String? {
         let keychain = Keychain(service: "com.yourcompany.TextCorrection")
         return try? keychain.get("OpenAIApiKey")
     }
@@ -95,6 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if testResult {
                     self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
                     print("已成功載入儲存的 API 金鑰")
+                    self.isApiKeyValid = true
                 } else {
                     DispatchQueue.main.async {
                         self.showApiKeyInputWindow()
@@ -108,79 +114,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showApiKeyInputWindow() {
-        let alert = NSAlert()
-        alert.messageText = "請輸入 OpenAI API 金鑰"
-        alert.informativeText = "您的 API 金鑰將被安全地儲存在系統鑰匙圈中。"
-        alert.alertStyle = .informational
-        
-        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        alert.accessoryView = inputTextField
-        
-        alert.addButton(withTitle: "確定")
-        alert.addButton(withTitle: "取消")
-        
-        let response = alert.runModal()
-        
-        if response == .alertFirstButtonReturn {
-            let apiKey = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !apiKey.isEmpty {
-                testAndSaveApiKey(apiKey)
-            } else {
-                self.showErrorAlert(message: "API 金鑰不能為空")
-            }
-        } else {
-            print("使用者取消了 API 金鑰輸入")
-        }
-    }
-
-    private func testAndSaveApiKey(_ apiKey: String) {
-        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-        
-        Task {
-            do {
-                let testResult = try await testService.testApiKey()
-                if testResult {
-                    self.saveApiKey(apiKey)
-                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-                    DispatchQueue.main.async {
-                        self.showSuccessAlert(message: "API 金鑰驗證成功並已儲存")
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        self.showErrorAlert(message: "API 金鑰無效，請檢查後重試")
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.showErrorAlert(message: "測試 API 金鑰時發生錯誤：\(error.localizedDescription)")
-                }
-            }
-        }
-    }
-
-    private func showSuccessAlert(message: String) {
-        let alert = NSAlert()
-        alert.messageText = "成功"
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "確定")
-        alert.runModal()
-    }
-
-    private func saveApiKey(_ apiKey: String) {
-        // 這裡使用 KeychainAccess 庫來安全地儲存 API 金鑰
-        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
-        do {
-            try keychain.set(apiKey, key: "OpenAIApiKey")
-            print("API 金鑰已成功儲存")
-        } catch {
-            print("儲存 API 金鑰時發生錯誤：\(error)")
-            self.showErrorAlert(message: "無法儲存 API 金鑰：\(error.localizedDescription)")
-        }
-    }
-
     @objc func statusItemClicked() {
+        if !isApiKeyValid {
+            showApiKeyInputWindow()
+            return
+        }
+
         if let event = NSApp.currentEvent, event.modifierFlags.contains(.option) {
             showPreferences()
         } else {
@@ -194,6 +133,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func copyAndRewriteSelectedText() {
+        if !isApiKeyValid {
+            showApiKeyInputWindow()
+            return
+        }
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             if let selectedText = self?.getSelectedText() {
                 DispatchQueue.main.async {
@@ -203,7 +147,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.textWindowManager.showTextWindow(text: selectedText)
                 }
             } else {
-                print("無法獲取選中文字")
+                print("無法獲選中文字")
             }
         }
     }
@@ -263,7 +207,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.originalText = ""
         self.currentTextView?.string = ""
         self.statsView?.stringValue = ""
-        self.shortcutView?.stringValue = ""
+        
+        // 重新設置 shortcutView 的文字樣式
+        setTextViewComponents(textView: self.currentTextView ?? NSTextView(),
+                              originalText: "",
+                              copyButton: self.copyButton ?? NSButton(),
+                              statsView: self.statsView ?? NSTextField(),
+                              shortcutView: self.shortcutView ?? NSTextField())
     }
 
     func getSelectedText() -> String? {
@@ -428,7 +378,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 .font: NSFont.systemFont(ofSize: 12),
                 .foregroundColor: NSColor.white,
                 .strokeColor: NSColor.gray,
-                .strokeWidth: -1.0
+                .strokeWidth: -0.5  // 調整這個值來改變邊框的粗細
             ]
             
             attributedString.addAttributes(attributes, range: NSRange(location: 0, length: buttonTitle.count))
@@ -456,7 +406,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 .font: NSFont.systemFont(ofSize: 12),
                 .foregroundColor: NSColor.white,
                 .strokeColor: NSColor.gray,
-                .strokeWidth: -1.0
+                .strokeWidth: -0.5  // 調整這個值來改變邊框的粗細
             ]
             
             attributedString.addAttributes(attributes, range: NSRange(location: 0, length: statsString.count))
@@ -557,5 +507,153 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.copyButton = copyButton
         self.statsView = statsView
         self.shortcutView = shortcutView
+
+        // 設置 shortcutView 的文字樣式
+        let normalText = "複製文字 "
+        let plusText = "+"
+        let shortcutTexts = ["⌘", "C"]
+        let attributedString = NSMutableAttributedString(string: normalText)
+        
+        let normalAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12),
+            .foregroundColor: NSColor.white,
+            .strokeColor: NSColor.gray,
+            .strokeWidth: -0.5
+        ]
+        
+        attributedString.addAttributes(normalAttributes, range: NSRange(location: 0, length: normalText.count))
+        
+        // 創建帶有圓角背景的快捷鍵文本
+        for (index, shortcutText) in shortcutTexts.enumerated() {
+            if index > 0 {
+                attributedString.append(NSAttributedString(string: plusText, attributes: normalAttributes))
+            }
+            
+            let shortcutAttachment = NSTextAttachment()
+            let shortcutLabel = NSTextField(labelWithString: shortcutText)
+            shortcutLabel.font = NSFont.systemFont(ofSize: 12)
+            shortcutLabel.textColor = .white
+            shortcutLabel.backgroundColor = NSColor.darkGray.withAlphaComponent(0.5)
+            shortcutLabel.isBordered = false
+            shortcutLabel.drawsBackground = true
+            shortcutLabel.alignment = .center
+            
+            let shortcutSize = shortcutLabel.sizeThatFits(NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+            shortcutLabel.frame = NSRect(x: 0, y: 0, width: shortcutSize.width + 6, height: shortcutSize.height)
+            
+            let shortcutImage = NSImage(size: shortcutLabel.frame.size)
+            shortcutImage.lockFocus()
+            NSGraphicsContext.current?.imageInterpolation = .high
+            let path = NSBezierPath(roundedRect: shortcutLabel.bounds, xRadius: 4, yRadius: 4)
+            path.addClip()
+            shortcutLabel.draw(shortcutLabel.bounds)
+            shortcutImage.unlockFocus()
+            
+            shortcutAttachment.image = shortcutImage
+            shortcutAttachment.bounds = CGRect(x: 0, y: -2, width: shortcutImage.size.width, height: shortcutImage.size.height)
+            let shortcutString = NSAttributedString(attachment: shortcutAttachment)
+            attributedString.append(shortcutString)
+        }
+        
+        // 設置垂直對齊
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .left
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+        attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
+        
+        self.shortcutView?.attributedStringValue = attributedString
+    }
+
+    private func showApiKeyInputWindow() {
+        let alert = NSAlert()
+        alert.messageText = "請輸入 OpenAI API 金鑰"
+        alert.informativeText = "您的 API 金鑰將被安全地儲存在系統鑰匙圈中。"
+        alert.alertStyle = .informational
+        
+        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        alert.accessoryView = inputTextField
+        
+        alert.addButton(withTitle: "確定")
+        alert.addButton(withTitle: "取消")
+        
+        let response = alert.runModal()
+        
+        if response == .alertFirstButtonReturn {
+            let apiKey = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !apiKey.isEmpty {
+                testAndSaveApiKey(apiKey)
+            } else {
+                self.showErrorAlert(message: "API 金鑰不能為空")
+            }
+        } else {
+            print("使用者取消了 API 金鑰輸入")
+        }
+    }
+
+    internal func testAndSaveApiKey(_ apiKey: String) {
+        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+        
+        Task {
+            do {
+                let testResult = try await testService.testApiKey()
+                if testResult {
+                    self.saveApiKey(apiKey)
+                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
+                    self.isApiKeyValid = true
+                    DispatchQueue.main.async {
+                        self.showSuccessAlert(message: "API 金鑰驗證成功並已儲存")
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.showErrorAlert(message: "API 金鑰無效，請檢查後重試")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.showErrorAlert(message: "測試 API 金鑰時發生錯誤：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func showSuccessAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "成功"
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "確定")
+        alert.runModal()
+    }
+
+    private func saveApiKey(_ apiKey: String) {
+        // 這裡使用 KeychainAccess 庫來安全地儲存 API 金鑰
+        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+        do {
+            try keychain.set(apiKey, key: "OpenAIApiKey")
+            print("API 金鑰已成功儲存")
+        } catch {
+            print("儲存 API 金鑰時發生錯誤：\(error)")
+            self.showErrorAlert(message: "無法儲存 API 金鑰：\(error.localizedDescription)")
+        }
+    }
+
+    private func setupSettingsButton() {
+        settingsButton = NSButton(frame: NSRect(x: 10, y: 10, width: 20, height: 20))
+        settingsButton?.image = NSImage(systemSymbolName: "gearshape.fill", accessibilityDescription: "設定")
+        settingsButton?.isBordered = false
+        settingsButton?.target = self
+        settingsButton?.action = #selector(showSettings)
+        
+        if let window = NSApplication.shared.windows.first,
+           let contentView = window.contentView {
+            contentView.addSubview(settingsButton!)
+        }
+    }
+    
+    @objc func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow(appDelegate: self)
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 }

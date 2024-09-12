@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		474CD3F42C92D0D900D3BD66 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = 474CD3F32C92D0D900D3BD66 /* KeychainAccess */; };
+		474CD3F82C93388B00D3BD66 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474CD3F52C93388B00D3BD66 /* PreferencesView.swift */; };
+		474CD3F92C93388B00D3BD66 /* PreferencesWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474CD3F62C93388B00D3BD66 /* PreferencesWindow.swift */; };
+		474CD3FA2C93388B00D3BD66 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474CD3F72C93388B00D3BD66 /* SettingsWindow.swift */; };
 		4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
@@ -57,6 +60,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		474CD3F52C93388B00D3BD66 /* PreferencesView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		474CD3F62C93388B00D3BD66 /* PreferencesWindow.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PreferencesWindow.swift; sourceTree = "<group>"; };
+		474CD3F72C93388B00D3BD66 /* SettingsWindow.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "仓耳今楷01-W05.ttf"; sourceTree = "<group>"; };
 		47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenAIModels.swift; sourceTree = "<group>"; };
 		47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextCorrectionError.swift; sourceTree = "<group>"; };
@@ -139,6 +145,9 @@
 		4784341E2C8C38D500456192 /* TextCorrection */ = {
 			isa = PBXGroup;
 			children = (
+				474CD3F52C93388B00D3BD66 /* PreferencesView.swift */,
+				474CD3F62C93388B00D3BD66 /* PreferencesWindow.swift */,
+				474CD3F72C93388B00D3BD66 /* SettingsWindow.swift */,
 				47826FC62C8F616100D2D8F4 /* Info.plist */,
 				47826FB32C8F5A4400D2D8F4 /* AccessibilityManager.swift */,
 				47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */,
@@ -351,8 +360,11 @@
 				47826FC32C8F5A4500D2D8F4 /* PasteboardManager.swift in Sources */,
 				47826FBC2C8F5A4500D2D8F4 /* AppDelegate.swift in Sources */,
 				47826FC22C8F5A4500D2D8F4 /* StatusItemManager.swift in Sources */,
+				474CD3F82C93388B00D3BD66 /* PreferencesView.swift in Sources */,
 				47826FC02C8F5A4500D2D8F4 /* Utilities.swift in Sources */,
+				474CD3F92C93388B00D3BD66 /* PreferencesWindow.swift in Sources */,
 				47826FBB2C8F5A4500D2D8F4 /* TextCorrectionError.swift in Sources */,
+				474CD3FA2C93388B00D3BD66 /* SettingsWindow.swift in Sources */,
 				47826FBD2C8F5A4500D2D8F4 /* OpenAIService.swift in Sources */,
 				47826FC52C8F5A4500D2D8F4 /* HotKeyManager.swift in Sources */,
 			);
