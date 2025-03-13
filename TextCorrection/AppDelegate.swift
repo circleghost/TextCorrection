@@ -3,19 +3,47 @@ import SwiftUI
 import Carbon
 import HotKey
 import KeychainAccess
+import os.log
+import Combine
 
+// 確保在整個檔案都可以使用 AppState
+import Foundation
+
+// 新增非 actor 隔離的工具函數用於獲取 API 金鑰
+@Sendable
+func getOpenAIApiKey() -> String {
+    do {
+        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+        return try keychain.get("OpenAIApiKey") ?? ""
+    } catch {
+        print("無法取得 API 金鑰")
+        return ""
+    }
+}
+
+// 將 AppDelegate 標記為 @unchecked Sendable，避免 Swift 併發警告
+extension AppDelegate: @unchecked Sendable {}
+
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItemManager: StatusItemManager!
-    var hotKeyManager: HotKeyManager!
     var pasteboardManager: PasteboardManager!
     var textWindowManager: TextWindowManager!
     var openAIService: OpenAIService!
+    var hotKeyManager: HotKeyManager!
+    
+    // 創建日誌對象
+    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppDelegate")
+    
+    // Combine訂閱集合
+    private var cancellables = Set<AnyCancellable>()
     
     var floatingButton: NSWindow?
     var textWindow: NSWindow?
+    var settingsWindow: NSWindow?
     private var lastSelectedText: String?
     private var isRewriting = false
-    private var originalText: String = ""
+    private var isProcessingCopy = false
     
     // 新增顏色常量
     let addedTextColor = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 1.0) // 深綠色
@@ -27,633 +55,787 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var copyButton: NSButton?
     var statsView: NSTextField?
     var shortcutView: NSTextField?
+    var settingsButton: NSButton?
     
     private var apiResponseText: String = ""
     private var apiReturnedText: String = ""
 
+    var originalText: String = ""
+
     let customFont: NSFont
 
+    // 系統提示詞
     private let systemPrompt = """
     你是一名專業的台灣繁體中文雜誌編輯，幫我檢查給定內容的錯字及語句文法。請特別注意以下規則：
     1. 中文與英文之間，中文與數字之間應有空格，例如 FLAC，JPEG，Google Search Console 。
-    2. 以下情況不需調整：
-       - 括弧內的說明，例如（圖一）、（加入產品圖示）。
-       - 阿拉伯數字不用調整成中文。
-       - 英文不一定要翻成中文。
-       - emoji 或特殊符號是為了增加閱讀體驗，也不必調整。
-    3. 請保留原文的段落和換行格式
-    4. 請不要使用額外的 Markdown 語法。
-    5. 請仔細審視給定的文字，冗語法錯誤進行改
-    6. 返回文字不要帶有 <text> 標籤。
+    2. 注重標點符號的正確使用，包括避免中英文標點混用。例如：括號應該使用全形（）而非半形()。
+    3. 修正不恰當的斷句，並注意句與句之間邏輯連貫性的順暢。
+    4. 糾正錯字、錯詞和語法錯誤。
+    5. 優化繁體中文表達，使文字更精簡、專業。
+    
+    請將更正後的內容放在兩個三個反引號之間。不需要講解修改的原因。只需要給出修改後的文本。
     """
 
     private var isApiKeyValid: Bool = false
 
-    var settingsWindow: SettingsWindow?
-    var settingsButton: NSButton?
-    
     override init() {
-        self.customFont = NSFont(name: "Yuanti TC", size: 19) ?? NSFont.systemFont(ofSize: 19)
+        // 初始化自定義字體
+        if let tsangerFont = NSFont(name: "TsangerJinKai01-W05", size: 14) {
+            customFont = tsangerFont
+        } else if let yuantiTC = NSFont(name: "Yuanti TC", size: 14) {
+            customFont = yuantiTC
+        } else {
+            customFont = NSFont.systemFont(ofSize: 14)
+        }
+        
         super.init()
     }
     
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        AccessibilityManager.requestAccessibilityPermission()
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
+        do {
+            // 將啟動策略改為 .regular，使應用程式在 Dock 中顯示
+            NSApp.setActivationPolicy(.regular)
+            
+            logger.info("應用程式啟動")
+            
+            // 設置AppKitBridge的AppDelegate引用
+            AppKitBridge.shared.setAppDelegate(self)
+            
+            // 訂閱AppState的變更
+            setupStateSubscriptions()
+            
+            // 初始化各個管理器 - 使用 try 來處理可能的初始化錯誤
+            try initializeManagersSafely()
+            
+            // 初始化UI元素
+            setupUI()
+            
+            // 檢查API Key是否有效
+            validateApiKey()
+            
+            // 打印初始狀態（用於調試）
+            AppState.shared.printDebugState()
+            AppKitBridge.shared.printDebugState()
+            } catch {
+            // 處理啟動過程中的任何錯誤
+            logger.error("應用程式啟動失敗: \(error.localizedDescription)")
+            
+            // 顯示錯誤警告給用戶
+            let alert = NSAlert()
+            alert.messageText = "應用程式啟動失敗"
+            alert.informativeText = "初始化過程中發生錯誤: \(error.localizedDescription)"
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "確定")
+            alert.runModal()
+        }
+    }
+    
+    /// 設置與AppState的訂閱關係
+    private func setupStateSubscriptions() {
+        // 訂閱窗口狀態變化
+        AppState.shared.$isTextWindowOpen
+            .sink { [weak self] isOpen in
+                self?.logger.debug("文本窗口狀態變更: \(isOpen)")
+                if !isOpen && self?.textWindow != nil {
+                DispatchQueue.main.async {
+                        self?.textWindow?.close()
+                        self?.textWindow = nil
+                    }
+                }
+            }
+            .store(in: &cancellables)
         
-        statusItemManager = StatusItemManager(appDelegate: self)
-        statusItemManager.setupStatusItem()
+        AppState.shared.$isSettingsWindowOpen
+            .sink { [weak self] isOpen in
+                self?.logger.debug("設置窗口狀態變更: \(isOpen)")
+                if !isOpen && self?.settingsWindow != nil {
+                    DispatchQueue.main.async {
+                        self?.settingsWindow?.close()
+                        self?.settingsWindow = nil
+                    }
+                }
+            }
+            .store(in: &cancellables)
         
-        hotKeyManager = HotKeyManager(appDelegate: self)
-        hotKeyManager.setupHotKey()
-        
-        pasteboardManager = PasteboardManager(appDelegate: self)
-        pasteboardManager.setupPasteboardObserver()
-        
-        textWindowManager = TextWindowManager(appDelegate: self)
-        
-        loadApiKey()
-        
-        setupSettingsButton()
+        // 訂閱剪貼板監控狀態變化
+        AppState.shared.$isClipboardMonitoringEnabled
+            .sink { [weak self] isEnabled in
+                self?.logger.debug("剪貼板監控狀態變更: \(isEnabled)")
+                if isEnabled {
+                    self?.pasteboardManager?.startMonitoring()
+            } else {
+                    self?.pasteboardManager?.stopMonitoring()
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// 安全地初始化各個管理器，並處理可能的錯誤
+    private func initializeManagersSafely() throws {
+        // 用 autoreleasepool 確保內存管理正確
+        autoreleasepool {
+            // 初始化 OpenAI 服務
+            openAIService = OpenAIService()
+            
+            // 初始化文本窗口管理器
+            textWindowManager = TextWindowManager(appDelegate: self)
+            
+            // 初始化狀態列管理器
+            statusItemManager = StatusItemManager(appDelegate: self)
+            statusItemManager.setupStatusItem()
+            
+            // 初始化剪貼簿管理器
+            pasteboardManager = PasteboardManager(appDelegate: self)
+            pasteboardManager.startMonitoring()
+            
+            // 熱鍵管理器最後初始化，避免其他管理器還未就緒時就接收熱鍵事件
+            hotKeyManager = HotKeyManager(appDelegate: self)
+            hotKeyManager.setupHotKey()
+            
+            logger.info("所有管理器已初始化")
+        }
     }
 
-    private func loadApiKey() {
-        if let storedApiKey = self.getStoredApiKey() {
-            testAndUseApiKey(storedApiKey)
-        } else {
-            DispatchQueue.main.async {
-                self.showApiKeyInputWindow()
+    // 初始化UI元素
+    private func setupUI() {
+        // 臨時空實現
+        logger.info("初始化UI元素")
+    }
+    
+    // 檢查API Key是否有效
+    private func validateApiKey() {
+        // 臨時空實現
+        logger.info("檢查API Key有效性")
+    }
+    
+    // 重寫文本
+    func rewriteText() {
+        // 確保我們有原始文本
+        let textToProcess = AppState.shared.originalText
+        if textToProcess.isEmpty {
+            logger.error("無法重寫文本：原始文本為空")
+            AppState.shared.errorMessage = "無文本可處理"
+                    return
+                }
+                
+        // 設置處理狀態
+        AppState.shared.isProcessing = true
+        AppState.shared.processingProgress = 0.1
+        AppState.shared.errorMessage = ""
+        
+        logger.info("開始處理文本，長度: \(textToProcess.count)字符")
+        
+        // 開始計時
+        let startTime = Date()
+        
+        // 保存原始文本到AppState
+        AppState.shared.originalText = textToProcess
+        
+        // 開始處理標記
+        AppState.shared.isProcessing = true
+        AppState.shared.processingProgress = 0.1
+        
+        // 獲取需要的參數，避免在 Task 內部捕獲 self
+        let currentTextView = self.currentTextView
+        // 直接複製函數實現到本地域，避免捕獲 self
+        let extractMarkdownBlock: @Sendable (String) -> String = { text in
+            let pattern = "```([\\s\\S]*?)```"
+            
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)) {
+                
+                if match.numberOfRanges > 1,
+                   let range = Range(match.range(at: 1), in: text) {
+                    return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            
+            // 如果沒有找到代碼塊，先移除所有 ``` 標記再返回原始文本
+            let cleanedText = text.replacingOccurrences(of: "```", with: "")
+            return cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let systemPromptCopy = self.systemPrompt
+        let textWindowManager = self.textWindowManager
+        // 獲取 OpenAI 服務引用（確保非可選）
+        guard let openAIServiceRef = self.openAIService else {
+            logger.error("OpenAI 服務未初始化")
+            AppState.shared.errorMessage = "服務未初始化"
+            AppState.shared.isProcessing = false
+            return
+        }
+        // 獲取 self 的弱引用，供後續閉包使用
+        weak var weakSelf = self
+        
+        // 使用流式 API 回應
+        Task.detached {
+            do {
+                var cumulativeResponse = ""
+                
+                try await openAIServiceRef.streamOpenAiApi(
+                    text: textToProcess,
+                    apiKeyProvider: { return getOpenAIApiKey() },
+                    systemPrompt: systemPromptCopy
+                ) { newContent in
+                    // 累積回應 - 不需要捕獲 self
+                    cumulativeResponse += newContent
+                    
+                    // 提取 markdown 代碼塊中的內容 (如果有)
+                    let processedText = extractMarkdownBlock(cumulativeResponse)
+                    
+                    // 在主線程上更新 UI
+                    Task { @MainActor in
+                        // 更新狀態和 UI - 只顯示文本而不進行比較
+                        AppState.shared.correctedText = processedText
+                        
+                        // 計算進度 (這只是一個估計值)
+                        let progress = min(0.1 + Double(cumulativeResponse.count) / Double(textToProcess.count), 0.95)
+                        AppState.shared.processingProgress = progress
+                        
+                        // 獲取 textView
+                        guard let textView = currentTextView else { return }
+                        
+                        // 在串流過程中只顯示處理後的文字，不進行差異比較
+                        let paragraphStyle = NSMutableParagraphStyle()
+                        paragraphStyle.lineSpacing = 8
+                        paragraphStyle.lineBreakMode = .byWordWrapping // 確保按單詞換行
+                        
+                        // 使用固定字體大小和樣式，避免因樣式變化導致的抖動
+                        let attributedString = NSAttributedString(
+                            string: processedText,
+                            attributes: [
+                                .font: NSFont.systemFont(ofSize: 22), // 增大字體與比較文字一致
+                                .foregroundColor: NSColor.white,
+                                .paragraphStyle: paragraphStyle
+                            ]
+                        )
+                        
+                        // 如果API回傳的資料已完整但串流還在進行，可以提前進行比較
+                        if processedText.count > 0 && processedText.contains("結束") {
+                            // 檢測到完整響應，提前進行比較
+                            if let windowManager = textWindowManager {
+                                windowManager.updateTextViewWithDiff(
+                                    originalText: textToProcess,
+                                    newText: processedText,
+                                    textView: textView
+                                )
+                                
+                                // 更新窗口大小以適應內容
+                                windowManager.resizeWindowToFitContent()
+                            }
+            } else {
+                            // 否則僅顯示流式文本，但避免頻繁更新導致抖動
+        DispatchQueue.main.async {
+                                // 保存目前的滾動位置
+                                let wasAtBottom = (textView.visibleRect.maxY >= textView.bounds.maxY)
+                                
+                                // 設置新的文本
+                                textView.textStorage?.setAttributedString(attributedString)
+                                
+                                // 如果之前是在底部，保持在底部滾動位置
+                                if wasAtBottom {
+                                    textView.scrollToEndOfDocument(nil)
+                                }
+                                
+                                // 更新窗口大小以適應內容
+                                if let windowManager = textWindowManager {
+                                    windowManager.resizeWindowToFitContent()
+                    }
+                }
             }
         }
     }
 
-    public func getStoredApiKey() -> String? {
-        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
-        return try? keychain.get("OpenAIApiKey")
-    }
-
-    private func testAndUseApiKey(_ apiKey: String) {
-        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-        
-        Task {
-            do {
-                let testResult = try await testService.testApiKey()
-                if testResult {
-                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-                    print("已成功載入儲存的 API 金鑰")
-                    self.isApiKeyValid = true
-                } else {
-                    DispatchQueue.main.async {
-                        self.showApiKeyInputWindow()
+                // 完成處理
+                let processingTime = Date().timeIntervalSince(startTime)
+                
+                // 提取最終結果和計算差異
+                let finalProcessedText = extractMarkdownBlock(cumulativeResponse)
+                let finalTotalWordsChanged = TextProcessing.calculateChangedWords(
+                    original: textToProcess,
+                    rewritten: finalProcessedText
+                )
+                
+                // 在主線程執行最終 UI 更新
+        await MainActor.run {
+                    // 先存儲 weakSelf 的本地副本到一個不可變變數，避免多次存取共享狀態
+                    let localSelf = weakSelf
+                    
+                    // 使用固定的 AppState 和 TextWindowManager，避免透過 weakSelf 存取
+                    AppState.shared.isProcessing = false
+                    AppState.shared.processingProgress = 1.0
+                    AppState.shared.lastProcessingTime = processingTime
+                    
+                    // 使用更新方法更新文本內容
+                    AppState.shared.updateTextInfo(original: textToProcess, corrected: finalProcessedText)
+                    
+                    // 如果需要調用 self 的方法，先確認 self 仍然存在
+                    if let appDelegate = localSelf {
+                        appDelegate.showTextWindowWithDiff(original: textToProcess, rewritten: finalProcessedText)
+                        appDelegate.logger.debug("文本處理完成，用時: \(String(format: "%.2f", processingTime))秒，變更詞數: \(finalTotalWordsChanged)")
                     }
                 }
             } catch {
-                DispatchQueue.main.async {
-                    self.showApiKeyInputWindow()
+                // 使用 MainActor 運行錯誤處理代碼
+                await MainActor.run {
+                    // 先存儲 weakSelf 的本地副本，避免多次存取共享狀態
+                    let localSelf = weakSelf
+                    
+                    // 直接使用 AppState 而不透過 weakSelf
+                    AppState.shared.isProcessing = false
+                    AppState.shared.errorMessage = "處理文本時發生錯誤：\(error.localizedDescription)"
+                    
+                    // 添加錯誤通知
+                    AppState.shared.addNotification(
+                        title: "處理失敗",
+                        message: error.localizedDescription,
+                        type: .error
+                    )
+                    
+                    // 只在 self 仍然存在時記錄錯誤
+                    if let appDelegate = localSelf {
+                        appDelegate.logger.error("處理文本時發生錯誤：\(error.localizedDescription)")
+                    }
                 }
             }
         }
     }
 
-    @objc func statusItemClicked() {
-        if !isApiKeyValid {
-            showApiKeyInputWindow()
-            return
-        }
-
-        if let event = NSApp.currentEvent, event.modifierFlags.contains(.option) {
-            showPreferences()
-        } else {
-            copyAndRewriteSelectedText()
-        }
-    }
-
-    @objc func showPreferences() {
-        // 顯示偏好設置視窗
-        print("顯示偏好設置視窗")
-    }
-
-    func copyAndRewriteSelectedText() {
-        if !isApiKeyValid {
-            showApiKeyInputWindow()
-            return
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            if let selectedText = self?.getSelectedText() {
-                DispatchQueue.main.async {
-                    self?.resetState()
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(selectedText, forType: .string)
-                    self?.textWindowManager.showTextWindow(text: selectedText)
-                }
-            } else {
-                print("無法獲選中文字")
+    // 添加缺少的 showTextWindowWithDiff 方法
+    func showTextWindowWithDiff(original: String, rewritten: String) {
+        logger.info("顯示文本差異窗口")
+        
+        // 如果文本窗口已經存在，就更新它
+        if let existingWindow = textWindow, let textView = currentTextView {
+            textWindowManager.updateTextViewWithDiff(
+                originalText: original,
+                newText: rewritten,
+                textView: textView
+            )
+            
+            // 如果窗口沒有顯示，就顯示它
+            if !existingWindow.isVisible {
+                existingWindow.makeKeyAndOrderFront(nil)
             }
+            
+            return
         }
+
+        // 如果還沒有文本窗口，就創建并顯示 SwiftUI 窗口
+        showSwiftUITextWindow(text: original)
+    }
+    
+    // 模擬狀態欄點擊
+    @objc func statusItemClicked(_ sender: Any?) {
+        logger.info("狀態欄被點擊")
     }
 
+    // 當顯示浮動按鈕時，通知AppState和AppKitBridge
     func showFloatingButton() {
-        if floatingButton == nil {
-            let buttonWindow = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 30, height: 30),
+        logger.info("嘗試顯示浮動按鈕")
+        
+        // 如果已有活躍的浮動按鈕，就不再創建新的
+        if let existingButton = floatingButton, existingButton.isVisible {
+            logger.info("已有活躍的浮動按鈕，不再創建新的")
+            
+            // 只需重置自動隱藏計時器，讓按鈕保持更長時間
+            // 確保在主線程上操作
+            Task { @MainActor in
+                // 取消現有的隱藏計時器
+                NSObject.cancelPreviousPerformRequests(withTarget: self, 
+                                                      selector: #selector(hideFloatingButton), 
+                                                      object: nil)
+                
+                // 設置新的自動隱藏計時器
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    guard let self = self else { return }
+                    if let window = self.floatingButton, window.isVisible {
+                        self.hideFloatingButton()
+                    }
+                }
+            }
+            return
+        }
+
+        // 如果浮動按鈕已存在但不可見，先關閉它
+        hideFloatingButton()
+        
+        // 確保沒有現存的浮動按鈕
+        if floatingButton != nil {
+            logger.warning("舊的浮動按鈕未正確清理，強制清理")
+            Task { @MainActor in
+                floatingButton?.close()
+                floatingButton = nil
+            }
+        }
+        
+        // 創建和顯示浮動按鈕 - 確保在主線程上執行
+        Task { @MainActor in
+            // 獲取當前鼠標位置
+            let mouseLocation = NSEvent.mouseLocation
+            
+            // 創建新的浮動按鈕窗口
+            let buttonWindow = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 100, height: 40),
                                        styleMask: [.nonactivatingPanel, .hudWindow],
                                        backing: .buffered,
                                        defer: false)
             buttonWindow.level = .floating
             buttonWindow.isOpaque = false
             buttonWindow.backgroundColor = .clear
-
-            let button = NSButton(frame: NSRect(x: 0, y: 0, width: 30, height: 30))
-            button.bezelStyle = .circular
-            button.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "複製")
+            buttonWindow.hasShadow = true
+            buttonWindow.isMovable = true  // 允許用戶移動按鈕
+            buttonWindow.alphaValue = 0.0  // 初始透明，為動畫做準備
+            
+            // 創建一個圓角矩形的背景視圖
+            let visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 100, height: 40))
+            visualEffectView.material = .hudWindow
+            visualEffectView.state = .active
+            visualEffectView.wantsLayer = true
+            visualEffectView.layer?.cornerRadius = 20  // 完全圓角效果
+            visualEffectView.layer?.borderWidth = 1.0
+            visualEffectView.layer?.borderColor = NSColor.systemBlue.withAlphaComponent(0.6).cgColor
+            
+            // 添加漸變效果
+            let gradientLayer = CAGradientLayer()
+            gradientLayer.frame = visualEffectView.bounds
+            gradientLayer.cornerRadius = 20
+            gradientLayer.colors = [
+                NSColor(calibratedRed: 0.2, green: 0.4, blue: 0.9, alpha: 0.7).cgColor,
+                NSColor(calibratedRed: 0.1, green: 0.2, blue: 0.5, alpha: 0.7).cgColor
+            ]
+            gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+            gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+            
+            visualEffectView.layer?.insertSublayer(gradientLayer, at: 0)
+            buttonWindow.contentView?.addSubview(visualEffectView)
+            
+            // 創建校正圖標
+            let iconView = NSImageView(frame: NSRect(x: 10, y: 10, width: 20, height: 20))
+            if let iconImage = NSImage(systemSymbolName: "checkmark.bubble.fill", accessibilityDescription: "文字校正") {
+                iconView.image = iconImage
+                iconView.contentTintColor = NSColor.white
+                visualEffectView.addSubview(iconView)
+            }
+            
+            // 創建文字標籤
+            let label = NSTextField(labelWithString: "校正文字")
+            label.frame = NSRect(x: 35, y: 10, width: 60, height: 20)
+            label.textColor = .white
+            label.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+            label.alignment = .left
+            label.backgroundColor = .clear
+            visualEffectView.addSubview(label)
+            
+            // 創建按鈕 - 覆蓋整個視圖以捕獲點擊
+            let button = NSButton(frame: visualEffectView.bounds)
+            button.bezelStyle = .roundRect
+            button.isBordered = false
+            button.title = ""  // 設置空標題，確保不顯示"button"字樣
+            button.wantsLayer = true
+            button.layer?.backgroundColor = NSColor.clear.cgColor
             button.target = self
-            button.action = #selector(showCopiedText)
-
-            buttonWindow.contentView?.addSubview(button)
-            floatingButton = buttonWindow
-        }
-
-        let mouseLocation = NSEvent.mouseLocation
-        floatingButton?.setFrameOrigin(NSPoint(x: mouseLocation.x, y: mouseLocation.y - 40))
-        floatingButton?.orderFront(nil)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-            self?.hideFloatingButton()
-        }
-    }
-
-    func showErrorAlert(message: String) {
-        let alert = NSAlert()
-        alert.messageText = "錯誤"
-        alert.informativeText = message
-        alert.addButton(withTitle: "確定")
-        alert.runModal()
-    }
-
-    @objc func showCopiedText() {
-        if let copiedString = NSPasteboard.general.string(forType: .string) {
-            textWindowManager.showTextWindow(text: copiedString)
-        } else {
-            print("無法獲取剪貼板內容")
-        }
-        hideFloatingButton()
-    }
-
-    func hideFloatingButton() {
-        floatingButton?.orderOut(nil)
-    }
-
-    func resetState() {
-        self.apiReturnedText = ""
-        self.originalText = ""
-        self.currentTextView?.string = ""
-        self.statsView?.stringValue = ""
-        
-        // 重新設置 shortcutView 的文字樣式
-        setTextViewComponents(textView: self.currentTextView ?? NSTextView(),
-                              originalText: "",
-                              copyButton: self.copyButton ?? NSButton(),
-                              statsView: self.statsView ?? NSTextField(),
-                              shortcutView: self.shortcutView ?? NSTextField())
-    }
-
-    func getSelectedText() -> String? {
-        let pasteboard = NSPasteboard.general
-        let oldContents = pasteboard.string(forType: .string)
-        
-        let source = CGEventSource(stateID: .hidSystemState)
-        
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        let cDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)
-        let cUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        
-        cmdDown?.flags = .maskCommand
-        cDown?.flags = .maskCommand
-        cUp?.flags = .maskCommand
-        cmdUp?.flags = .maskCommand
-        
-        cmdDown?.post(tap: .cghidEventTap)
-        cDown?.post(tap: .cghidEventTap)
-        cUp?.post(tap: .cghidEventTap)
-        cmdUp?.post(tap: .cghidEventTap)
-        
-        Thread.sleep(forTimeInterval: 0.1)
-        
-        let newContents = pasteboard.string(forType: .string)
-        
-        if newContents != oldContents {
-            return newContents
-        }
-        
-        print("無法獲取選中的文字")
-        return nil
-    }
-
-    func rewriteText() {
-        guard let textView = currentTextView, !isRewriting else {
-            print("正在重寫中，請稍候...")
-            return
-        }
-        
-        guard !originalText.isEmpty else {
-            print("錯誤：原始文字為空")
-            return
-        }
-        
-        isRewriting = true
-        print("開始重寫文字，原始文字長度：\(originalText.count)")
-        
-        self.apiReturnedText = ""
-        textView.string = ""
-        
-        Task { [weak self] in
-            guard let self = self else { return }
-            do {
-                print("調用 OpenAI API...")
+            button.action = #selector(self.floatingButtonClicked(_:))
+            button.toolTip = "點擊處理剪貼板中的文字"
+            visualEffectView.addSubview(button)
+            
+            // 計算按鈕位置，確保在游標附近但不會超出螢幕邊界
+            var positionX = mouseLocation.x - 50 // 按鈕寬度的一半
+            var positionY = mouseLocation.y - 50 // 在游標下方一點
+            
+            // 檢查並調整位置以避免超出螢幕邊界
+            if let mainScreen = NSScreen.main {
+                let screenFrame = mainScreen.visibleFrame
                 
-                try await withTimeout(seconds: 30) {
-                    try await self.openAIService.streamOpenAiApi(text: self.originalText) { rewrittenText in
-                        Task {
-                            await MainActor.run {
-                                self.apiReturnedText += rewrittenText
-                                self.updateStreamText(textView: textView, newText: rewrittenText)
-                            }
-                        }
-                    }
+                // 確保不超出右邊界
+                if positionX + 100 > screenFrame.maxX {
+                    positionX = screenFrame.maxX - 110
                 }
                 
-                print("API 返回的文字長度：\(self.apiReturnedText.count)")
+                // 確保不超出左邊界
+                if positionX < screenFrame.minX {
+                    positionX = screenFrame.minX + 10
+                }
                 
-                try await Task.sleep(nanoseconds: 500_000_000)  // 0.5 秒延遲
-
-                await self.showComparisonResults(textView: textView)
-                self.updateStats(rewrittenText: self.apiReturnedText)
+                // 確保不超出上邊界
+                if positionY + 40 > screenFrame.maxY {
+                    positionY = screenFrame.maxY - 50
+                }
                 
-                await MainActor.run {
-                    self.isRewriting = false
-                }
-                print("文字重寫完成")
-            } catch {
-                print("重寫文字時發生錯誤: \(error)")
-                await MainActor.run {
-                    self.showErrorAlert(message: "重寫文字時發生錯誤：\(error.localizedDescription)")
-                    self.isRewriting = false
+                // 確保不超出下邊界
+                if positionY < screenFrame.minY {
+                    positionY = screenFrame.minY + 10
                 }
             }
-        }
-    }
-
-    func updateStreamText(textView: NSTextView, newText: String) {
-        let trimmedText = trimExtraWhitespace(newText)
-        let attributedString = NSAttributedString(string: trimmedText, attributes: [
-            .font: self.customFont,
-            .foregroundColor: NSColor.white,
-            .kern: 1.0  // 增加字距
-        ])
-        textView.textStorage?.append(attributedString)
-        textView.scrollToEndOfDocument(nil)
-        
-        if let textContainer = textView.enclosingScrollView?.superview,
-           let mainArea = textContainer.superview {
-            adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
-        }
-    }
-
-    func showComparisonResults(textView: NSTextView) async {
-        guard !apiReturnedText.isEmpty else {
-            print("錯誤：API 返回的文字為空")
-            await MainActor.run {
-                textView.string = "錯誤：API 未返回任何文字"
-            }
-            return
-        }
-        
-        let originalTextCopy = self.originalText
-        let apiReturnedTextCopy = trimExtraWhitespace(self.apiReturnedText)
-        
-        await MainActor.run {
-            let comparisonResult = TextProcessing.compareTexts(original: originalTextCopy, rewritten: apiReturnedTextCopy, customFont: self.customFont)
-            print("比較結果的長度：\(comparisonResult.length)")
-            textView.textStorage?.setAttributedString(comparisonResult)
-            textView.scrollToEndOfDocument(nil)
             
-            if let textContainer = textView.enclosingScrollView?.superview,
-               let mainArea = textContainer.superview {
-                self.adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
-            }
-        }
-    }
-
-    @objc func copyAndPasteRewrittenText() {
-        guard !apiReturnedText.isEmpty else {
-            print("錯誤：API 返回的文字為空")
-            return
-        }
-        
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(apiReturnedText, forType: .string)
-        print("已複製 API 返回的糾正後文字")
-        
-        let source = CGEventSource(stateID: .hidSystemState)
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true)
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
-        
-        cmdDown?.flags = .maskCommand
-        vDown?.flags = .maskCommand
-        vUp?.flags = .maskCommand
-        cmdUp?.flags = .maskCommand
-        
-        cmdDown?.post(tap: .cghidEventTap)
-        vDown?.post(tap: .cghidEventTap)
-        vUp?.post(tap: .cghidEventTap)
-        cmdUp?.post(tap: .cghidEventTap)
-        
-        DispatchQueue.main.async {
-            let buttonTitle = "已複製並貼上"
-            let attributedString = NSMutableAttributedString(string: buttonTitle)
+            // 設置窗口位置
+            buttonWindow.setFrameOrigin(NSPoint(x: positionX, y: positionY))
             
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12),
-                .foregroundColor: NSColor.white,
-                .strokeColor: NSColor.gray,
-                .strokeWidth: -0.5  // 調整這個值來改變邊框的粗細
-            ]
-            
-            attributedString.addAttributes(attributes, range: NSRange(location: 0, length: buttonTitle.count))
-            
-            self.copyButton?.attributedTitle = attributedString
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                let originalTitle = "複製並貼上"
-                let originalAttributedString = NSMutableAttributedString(string: originalTitle)
-                originalAttributedString.addAttributes(attributes, range: NSRange(location: 0, length: originalTitle.count))
-                self.copyButton?.attributedTitle = originalAttributedString
-            }
-        }
-    }
-
-    func updateStats(rewrittenText: String) {
-        let rewrittenCharCount = rewrittenText.count
-        let changesCount = calculateChanges(rewritten: rewrittenText)
-        
-        DispatchQueue.main.async {
-            let statsString = "字元數: \(rewrittenCharCount) | 改變: \(changesCount) | 模型: GPT-4o-mini"
-            let attributedString = NSMutableAttributedString(string: statsString)
-            
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12),
-                .foregroundColor: NSColor.white,
-                .strokeColor: NSColor.gray,
-                .strokeWidth: -0.5  // 調整這個值來改變邊框的粗細
-            ]
-            
-            attributedString.addAttributes(attributes, range: NSRange(location: 0, length: statsString.count))
-            
-            self.statsView?.attributedStringValue = attributedString
-        }
-    }
-
-    func calculateChanges(rewritten: String) -> Int {
-        let diff = TextProcessing.diffStrings(originalText, rewritten)
-        var changesCount = 0
-        
-        for change in diff {
-            switch change {
-            case .insert, .delete:
-                changesCount += 1
-            case .equal:
-                continue
-            }
-        }
-        
-        return changesCount
-    }
-
-    @objc func textDidChange(_ notification: Notification) {
-        guard let textView = notification.object as? NSTextView,
-              let textContainer = textView.superview?.superview,
-              let mainArea = textContainer.superview else {
-            return
-        }
-
-        adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
-    }
-
-    @objc func windowDidResize(_ notification: Notification) {
-        if let window = notification.object as? NSWindow,
-           let contentView = window.contentView,
-           let mainArea = contentView.subviews.first(where: { $0.identifier?.rawValue == "mainArea" }),
-           let textContainer = mainArea.subviews.first(where: { $0.identifier?.rawValue == "textContainer" }),
-           let scrollView = textContainer.subviews.first as? NSScrollView,
-           let textView = scrollView.documentView as? NSTextView {
-            adjustTextContainerHeight(textView: textView, textContainer: textContainer, mainArea: mainArea)
-        }
-    }
-
-    func adjustTextContainerHeight(textView: NSTextView, textContainer: NSView, mainArea: NSView) {
-        let contentSize = textView.layoutManager?.usedRect(for: textView.textContainer!).size ?? .zero
-        let newHeight = max(contentSize.height + 30, 100) // 設置最小高度為 100
-
-        textView.frame.size.height = contentSize.height
-        
-        if let scrollView = textView.enclosingScrollView {
-            scrollView.documentView?.frame.size = CGSize(width: contentSize.width, height: contentSize.height)
-        }
-
-        // 更新 textContainer 的高度約束
-        if let heightConstraint = textContainer.constraints.first(where: { $0.firstAttribute == .height }) {
-            let oldHeight = heightConstraint.constant
-            heightConstraint.constant = newHeight
-            
-            // 計算高度變化
-            let heightDifference = newHeight - oldHeight
-            
-            // 調整視窗大小
-            if let window = textView.window {
-                var frame = window.frame
-                frame.size.height += heightDifference
-                frame.origin.y -= heightDifference // 保持視窗頂部位置不變
-                window.setFrame(frame, display: true, animate: true)
-            }
-        } else {
-            let heightConstraint = textContainer.heightAnchor.constraint(equalToConstant: newHeight)
-            heightConstraint.priority = .defaultHigh
-            heightConstraint.isActive = true
-        }
-
-        mainArea.layoutSubtreeIfNeeded()
-        
-        // 確保字體正確應用
-        textView.font = self.customFont
-    }
-
-    func resetWindowState() {
-        textWindow?.close()
-        textWindow = nil
-        currentTextView = nil
-        copyButton = nil
-        statsView = nil
-        shortcutView = nil
-        apiReturnedText = ""
-        originalText = ""
-    }
-
-    // 新增以下方法
-    func setTextViewComponents(textView: NSTextView, originalText: String, copyButton: NSButton, statsView: NSTextField, shortcutView: NSTextField) {
-        self.currentTextView = textView
-        self.originalText = originalText
-        self.copyButton = copyButton
-        self.statsView = statsView
-        self.shortcutView = shortcutView
-
-        // 設置 shortcutView 的文字樣式
-        let normalText = "複製文字 "
-        let plusText = "+"
-        let shortcutTexts = ["⌘", "C"]
-        let attributedString = NSMutableAttributedString(string: normalText)
-        
-        let normalAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12),
-            .foregroundColor: NSColor.white,
-            .strokeColor: NSColor.gray,
-            .strokeWidth: -0.5
-        ]
-        
-        attributedString.addAttributes(normalAttributes, range: NSRange(location: 0, length: normalText.count))
-        
-        // 創建帶有圓角背景的快捷鍵文本
-        for (index, shortcutText) in shortcutTexts.enumerated() {
-            if index > 0 {
-                attributedString.append(NSAttributedString(string: plusText, attributes: normalAttributes))
-            }
-            
-            let shortcutAttachment = NSTextAttachment()
-            let shortcutLabel = NSTextField(labelWithString: shortcutText)
-            shortcutLabel.font = NSFont.systemFont(ofSize: 12)
-            shortcutLabel.textColor = .white
-            shortcutLabel.backgroundColor = NSColor.darkGray.withAlphaComponent(0.5)
-            shortcutLabel.isBordered = false
-            shortcutLabel.drawsBackground = true
-            shortcutLabel.alignment = .center
-            
-            let shortcutSize = shortcutLabel.sizeThatFits(NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
-            shortcutLabel.frame = NSRect(x: 0, y: 0, width: shortcutSize.width + 6, height: shortcutSize.height)
-            
-            let shortcutImage = NSImage(size: shortcutLabel.frame.size)
-            shortcutImage.lockFocus()
-            NSGraphicsContext.current?.imageInterpolation = .high
-            let path = NSBezierPath(roundedRect: shortcutLabel.bounds, xRadius: 4, yRadius: 4)
-            path.addClip()
-            shortcutLabel.draw(shortcutLabel.bounds)
-            shortcutImage.unlockFocus()
-            
-            shortcutAttachment.image = shortcutImage
-            shortcutAttachment.bounds = CGRect(x: 0, y: -2, width: shortcutImage.size.width, height: shortcutImage.size.height)
-            let shortcutString = NSAttributedString(attachment: shortcutAttachment)
-            attributedString.append(shortcutString)
-        }
-        
-        // 設置垂直對齊
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .left
-        paragraphStyle.lineBreakMode = .byTruncatingTail
-        attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
-        
-        self.shortcutView?.attributedStringValue = attributedString
-    }
-
-    private func showApiKeyInputWindow() {
-        let alert = NSAlert()
-        alert.messageText = "請輸入 OpenAI API 金鑰"
-        alert.informativeText = "您的 API 金鑰將被安全地儲存在系統鑰匙圈中。"
-        alert.alertStyle = .informational
-        
-        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        alert.accessoryView = inputTextField
-        
-        alert.addButton(withTitle: "確定")
-        alert.addButton(withTitle: "取消")
-        
-        let response = alert.runModal()
-        
-        if response == .alertFirstButtonReturn {
-            let apiKey = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !apiKey.isEmpty {
-                testAndSaveApiKey(apiKey)
-            } else {
-                self.showErrorAlert(message: "API 金鑰不能為空")
-            }
-        } else {
-            print("使用者取消了 API 金鑰輸入")
-        }
-    }
-
-    internal func testAndSaveApiKey(_ apiKey: String) {
-        let testService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-        
-        Task {
-            do {
-                let testResult = try await testService.testApiKey()
-                if testResult {
-                    self.saveApiKey(apiKey)
-                    self.openAIService = OpenAIService(apiKeyProvider: { apiKey }, systemPrompt: self.systemPrompt)
-                    self.isApiKeyValid = true
-                    DispatchQueue.main.async {
-                        self.showSuccessAlert(message: "API 金鑰驗證成功並已儲存")
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        self.showErrorAlert(message: "API 金鑰無效，請檢查後重試")
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.showErrorAlert(message: "測試 API 金鑰時發生錯誤：\(error.localizedDescription)")
+            // 添加點擊外部自動關閉的功能
+            NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self = self else { return }
+                if let window = self.floatingButton,
+                   window.isVisible,
+                   !NSPointInRect(event.locationInWindow, window.frame) {
+                    self.hideFloatingButton()
                 }
             }
-        }
-    }
-
-    private func showSuccessAlert(message: String) {
-        let alert = NSAlert()
-        alert.messageText = "成功"
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "確定")
-        alert.runModal()
-    }
-
-    private func saveApiKey(_ apiKey: String) {
-        // 這裡使用 KeychainAccess 庫來安全地儲存 API 金鑰
-        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
-        do {
-            try keychain.set(apiKey, key: "OpenAIApiKey")
-            print("API 金鑰已成功儲存")
-        } catch {
-            print("儲存 API 金鑰時發生錯誤：\(error)")
-            self.showErrorAlert(message: "無法儲存 API 金鑰：\(error.localizedDescription)")
-        }
-    }
-
-    private func setupSettingsButton() {
-        settingsButton = NSButton(frame: NSRect(x: 10, y: 10, width: 20, height: 20))
-        settingsButton?.image = NSImage(systemSymbolName: "gearshape.fill", accessibilityDescription: "設定")
-        settingsButton?.isBordered = false
-        settingsButton?.target = self
-        settingsButton?.action = #selector(showSettings)
-        
-        if let window = NSApplication.shared.windows.first,
-           let contentView = window.contentView {
-            contentView.addSubview(settingsButton!)
+            
+            // 顯示窗口
+            buttonWindow.orderFront(nil)
+            
+            // 添加浮動按鈕出現動畫
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.allowsImplicitAnimation = true
+                buttonWindow.animator().alphaValue = 0.95
+                
+                // 輕微的彈跳效果
+                let scale = CABasicAnimation(keyPath: "transform.scale")
+                scale.fromValue = 0.8
+                scale.toValue = 1.0
+                scale.duration = 0.2
+                scale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                visualEffectView.layer?.add(scale, forKey: "scale")
+            }
+            
+            // 設置窗口標識符以方便追蹤
+            buttonWindow.title = "TextCorrectionFloatingButton"
+            
+            // 保存引用
+            self.floatingButton = buttonWindow
+            
+            // 3 秒後自動隱藏
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self = self else { return }
+                // 檢查按鈕窗口是否存在
+                if let window = self.floatingButton, window.isVisible {
+                    self.hideFloatingButton()
+                }
+            }
+            
+            // 更新UI狀態
+            AppState.shared.isFloatingButtonVisible = true
+            AppKitBridge.shared.notifyWindowStateChanged(type: "floatingButton", isVisible: true)
+            
+            self.logger.info("浮動按鈕已顯示在游標附近")
         }
     }
     
-    @objc func showSettings() {
-        if settingsWindow == nil {
-            settingsWindow = SettingsWindow(appDelegate: self)
+    // 浮動按鈕點擊處理
+    @objc func floatingButtonClicked(_ sender: Any?) {
+        logger.info("浮動按鈕被點擊")
+        
+        // 隱藏浮動按鈕
+        hideFloatingButton()
+        
+        // 複製當前選中的文本 (直接從剪貼板獲取，確保最新)
+        let pasteboard = NSPasteboard.general
+        guard let clipboardText = pasteboard.string(forType: .string), !clipboardText.isEmpty else {
+            logger.warning("剪貼板中沒有文本")
+            return
         }
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        
+        // 立即設置 AppState 的原始文本，確保在任務開始前就準備好
+        AppState.shared.originalText = clipboardText
+        
+        // 確保在主線程上操作 UI
+        Task { @MainActor in
+            // 先顯示文本校正窗口
+            textWindowManager.showTextWindow(text: clipboardText)
+            
+            // 然後再次確認 AppState 有正確的原始文本
+            AppState.shared.originalText = clipboardText
+            
+            // 現在開始重寫文本
+            self.originalText = clipboardText
+            rewriteText()
+        }
+        
+        logger.info("開始處理剪貼板文本 - 文本長度: \(clipboardText.count)字符")
+    }
+    
+    // 當隱藏浮動按鈕時，通知AppState和AppKitBridge
+    @objc func hideFloatingButton() {
+        logger.info("隱藏浮動按鈕")
+        
+        // 隱藏並釋放浮動按鈕窗口 - 確保在主線程操作
+        Task { @MainActor in
+            if let button = floatingButton {
+                button.close()
+                floatingButton = nil
+            }
+            
+            // 更新UI狀態
+            AppState.shared.isFloatingButtonVisible = false
+            AppKitBridge.shared.notifyWindowStateChanged(type: "floatingButton", isVisible: false)
+        }
+    }
+
+    // 獲取選中的文本 - 供HotKeyManager使用
+    func getSelectedText() -> String? {
+        // 從剪貼板獲取文本
+        return NSPasteboard.general.string(forType: .string)
+    }
+
+    // 使用 SwiftUI 顯示文本校正視窗
+    func showSwiftUITextWindow(text: String) {
+        // 設置 AppState
+        AppState.shared.originalText = text
+        AppState.shared.correctedText = ""
+        AppState.shared.errorMessage = ""
+        AppState.shared.isProcessing = false
+        
+        // 確保所有 UI 操作在主線程執行
+        Task { @MainActor in
+            // 創建 SwiftUI 視圖和託管控制器
+            let correctionView = TextCorrectionView()
+                .environmentObject(AppState.shared)
+            let hostingController = NSHostingController(rootView: correctionView)
+            
+            // 計算視窗位置和大小
+            let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
+            let width = screenFrame.width * 0.5
+            let height = screenFrame.height * 0.25
+            let origin = NSPoint(
+                x: screenFrame.midX - width / 2,
+                y: screenFrame.midY - height / 2
+            )
+            let windowFrame = NSRect(origin: origin, size: NSSize(width: width, height: height))
+            
+            // 創建視窗
+            let window = NSPanel(
+                contentRect: windowFrame,
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            
+            window.title = "AI 潤飾"
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
+            window.contentView?.wantsLayer = true
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = true
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.minSize = NSSize(width: 400, height: 250)
+            
+            // 設置關閉窗口的回調
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            
+            // 設置視圖控制器
+            window.contentViewController = hostingController
+            
+            // 顯示視窗
+            window.makeKeyAndOrderFront(nil)
+            window.level = .floating
+            NSApp.activate(ignoringOtherApps: true)
+            
+            // 保存視窗引用並更新狀態
+            self.textWindow = window
+            AppState.shared.isTextWindowOpen = true
+            AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: true)
+            
+            // 開始重寫文本
+            self.originalText = text
+            self.rewriteText()
+            
+            logger.info("已顯示SwiftUI文本校正窗口")
+        }
+    }
+
+    // 顯示設定視窗
+    @objc func showSettings() {
+        // 使用 NSHostingController 顯示 SwiftUI 設定視圖
+        logger.info("打開設定視窗")
+        
+        // 確保所有 UI 操作在主線程執行
+        Task { @MainActor in
+            // 創建 SettingsView 並注入 AppState 環境對象
+            let settingsView = SettingsView()
+                .environmentObject(AppState.shared)
+            
+            let hostingController = NSHostingController(rootView: settingsView)
+            
+            if settingsWindow == nil {
+                settingsWindow = NSWindow(
+                    contentRect: NSRect(x: 0, y: 0, width: 350, height: 430),
+                    styleMask: [.titled, .closable, .miniaturizable],
+                    backing: .buffered,
+                    defer: false
+                )
+                settingsWindow?.title = "設定"
+                settingsWindow?.center()
+                settingsWindow?.isReleasedWhenClosed = false
+                settingsWindow?.delegate = self
+            }
+            
+            settingsWindow?.contentViewController = hostingController
+            settingsWindow?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            
+            // 更新狀態
+            AppState.shared.isSettingsWindowOpen = true
+            AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
+        }
+    }
+    
+    // 添加 copyAndPasteRewrittenText 方法，因為 AppKitBridge 中引用了這個方法
+    func copyAndPasteRewrittenText() {
+        logger.info("複製並貼上重寫文本")
+        
+        let correctedText = AppState.shared.correctedText
+        if correctedText.isEmpty {
+            logger.warning("沒有可複製的校正文本")
+                return
+            }
+
+        // 複製到剪貼板
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(correctedText, forType: .string)
+        
+        logger.info("已複製校正文本到剪貼板")
+    }
+    
+    // 清理資源
+    func applicationWillTerminate(_ notification: Notification) {
+        logger.info("應用程式即將終止，清理資源")
+        
+        // 先停止熱鍵監聽，避免觸發回調而使用已釋放的資源
+        hotKeyManager?.disableHotKey()
+        hotKeyManager = nil
+        
+        // 停止剪貼簿監控
+        pasteboardManager?.stopMonitoring()
+        pasteboardManager = nil
+        
+        // 清理其他資源
+        statusItemManager = nil
+        textWindowManager = nil
+        openAIService = nil
+        
+        // 取消所有訂閱
+        cancellables.removeAll()
     }
 }
+
+// MARK: - NSWindowDelegate
+
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        
+        if window == textWindow {
+            logger.debug("文本窗口將要關閉")
+            AppState.shared.isTextWindowOpen = false
+            AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
+            textWindow = nil
+        } else if window == settingsWindow {
+            logger.debug("設置窗口將要關閉")
+            AppState.shared.isSettingsWindowOpen = false
+            AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: false)
+        }
+    }
+}
+
+// ... 其餘擴展保持不變 ...

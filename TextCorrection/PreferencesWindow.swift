@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PreferencesWindow: View {
+struct PreferencesWindow: View, @unchecked Sendable {
     @AppStorage("OPENAI_API_KEY") private var apiKey: String = ""
     @State private var tempApiKey: String = ""
     @State private var showApiKeyInput: Bool = false

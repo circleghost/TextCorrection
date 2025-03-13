@@ -1,6 +1,6 @@
 import Foundation
 
-func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+@Sendable func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
         group.addTask {
             try await operation()
@@ -17,6 +17,6 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws 
     }
 }
 
-func trimExtraWhitespace(_ text: String) -> String {
+@Sendable func trimExtraWhitespace(_ text: String) -> String {
     return text.trimmingCharacters(in: .whitespacesAndNewlines)
 }

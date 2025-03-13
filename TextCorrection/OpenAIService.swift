@@ -1,15 +1,15 @@
 import Foundation
 
-class OpenAIService {
-    private let apiKeyProvider: () -> String
-    private let systemPrompt: String
-    
-    init(apiKeyProvider: @escaping () -> String, systemPrompt: String) {
-        self.apiKeyProvider = apiKeyProvider
-        self.systemPrompt = systemPrompt
-    }
-    
-    func streamOpenAiApi(text: String, onUpdate: @escaping (String) -> Void) async throws {
+// 完整的類實現，而不是擴展
+class OpenAIService: @unchecked Sendable {
+    // 使用方法而不是存儲屬性
+    @Sendable
+    func streamOpenAiApi(
+        text: String, 
+        apiKeyProvider: @Sendable @escaping () -> String, 
+        systemPrompt: String, 
+        onUpdate: @MainActor @escaping (String) -> Void
+    ) async throws {
         print("準備 API 請求...")
         
         let request = OpenAIRequest(
@@ -19,7 +19,7 @@ class OpenAIService {
                 OpenAIRequest.Message(role: "user", content: "請將以下文字複寫，只需改錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>")
             ],
             temperature: 0.7,
-            maxTokens: 1000,
+            maxTokens: 2000,
             stream: true
         )
 
@@ -63,19 +63,24 @@ class OpenAIService {
                    let delta = choices.first?["delta"] as? [String: String],
                    let content = delta["content"] {
                     fullContent += content
-                    onUpdate(content)
+                    await MainActor.run {
+                        onUpdate(content)
+                    }
                 }
             }
         }
         
         // 在這裡添加一個最終的更新，確保使用完整的內容
-        onUpdate("\n")  // 添加一個換行符來觸發最後一次更新
+        await MainActor.run {
+            onUpdate("\n")  // 添加一個換行符來觸發最後一次更新
+        }
         
         print("成功獲取重寫後的文字，總長度：\(fullContent.count)")
         print("API 完整回應：\n\(fullContent)")
     }
     
-    func testApiKey() async throws -> Bool {
+    @Sendable
+    func testApiKey(apiKeyProvider: @escaping () -> String) async throws -> Bool {
         let url = URL(string: "https://api.openai.com/v1/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"

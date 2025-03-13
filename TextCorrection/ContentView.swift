@@ -12,7 +12,7 @@ extension Notification.Name {
     static let didSelectText = Notification.Name("didSelectText")
 }
 
-struct ContentView: View {
+struct ContentView: View, @unchecked Sendable {
     @State private var selectedText: String = ""
     @State private var showPopup: Bool = false
     @State private var showFloatingButton: Bool = false
