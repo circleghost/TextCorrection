@@ -6,7 +6,7 @@ import KeychainAccess
 import os.log
 import Combine
 
-// 確保在整個檔案都可以使用 AppState
+// 確保在整個檔案都可以使用 AppState 和 AppStateObserver
 import Foundation
 
 // 新增非 actor 隔離的工具函數用於獲取 API 金鑰
@@ -96,51 +96,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        do {
-            // 將啟動策略改為 .regular，使應用程式在 Dock 中顯示
-            NSApp.setActivationPolicy(.regular)
-            
-            logger.info("應用程式啟動")
-            
-            // 設置AppKitBridge的AppDelegate引用
-            AppKitBridge.shared.setAppDelegate(self)
-            
-            // 訂閱AppStateObserver的變更
-            setupStateSubscriptions()
-            
-            // 初始化各個管理器 - 使用 try 來處理可能的初始化錯誤
-            try initializeManagersSafely()
-            
-            // 初始化UI元素
-            setupUI()
-            
-            // 檢查API Key是否有效
-            validateApiKey()
-            
-            // 打印初始狀態（用於調試）
-            Task {
-                await AppState.shared.printDebugState()
-            }
-            AppKitBridge.shared.printDebugState()
-            } catch {
-            // 處理啟動過程中的任何錯誤
-            logger.error("應用程式啟動失敗: \(error.localizedDescription)")
-            
-            // 顯示錯誤警告給用戶
-            let alert = NSAlert()
-            alert.messageText = "應用程式啟動失敗"
-            alert.informativeText = "初始化過程中發生錯誤: \(error.localizedDescription)"
-            alert.alertStyle = .critical
-            alert.addButton(withTitle: "確定")
-            alert.runModal()
+        // 將啟動策略改為 .regular，使應用程式在 Dock 中顯示
+        NSApp.setActivationPolicy(.regular)
+        
+        logger.info("應用程式啟動")
+        
+        // 設置AppKitBridge的AppDelegate引用
+        AppKitBridge.shared.setAppDelegate(self)
+        
+        // 訂閱AppStateObserver的變更
+        setupStateSubscriptions()
+        
+        // 初始化各個管理器
+        initializeManagers()
+        
+        // 初始化UI元素
+        setupUI()
+        
+        // 檢查API Key是否有效
+        validateApiKey()
+        
+        // 打印初始狀態（用於調試）
+        Task {
+            await AppState.shared.printDebugState()
         }
+        AppKitBridge.shared.printDebugState()
     }
     
     /// 設置與AppStateObserver的訂閱關係
     private func setupStateSubscriptions() {
         // 訂閱文本窗口狀態變化
         appStateObserver.$activeScreen
-            .sink { [weak self] activeScreen in
+            .sink { [weak self] (activeScreen: ActiveScreen) in
                 guard let self = self else { return }
                 self.logger.debug("活動螢幕狀態變更: \(activeScreen)")
                 
@@ -174,7 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 訂閱剪貼板監控狀態變化
         appStateObserver.$isMonitoringClipboard
-            .sink { [weak self] isEnabled in
+            .sink { [weak self] (isEnabled: Bool) in
                 // 使用主線程更新UI和APP狀態
                 DispatchQueue.main.async {
                     self?.logger.debug("剪貼板監控狀態變更: \(isEnabled)")
@@ -188,33 +175,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
     
-    /// 安全地初始化各個管理器，並處理可能的錯誤
-    private func initializeManagersSafely() throws {
-        // 在這裡你可能想使用一些更複雜的錯誤處理機制
-        do {
-            // 初始化管理器
-            statusItemManager = StatusItemManager(appDelegate: self)
-            pasteboardManager = PasteboardManager(appDelegate: self)
-            textWindowManager = TextWindowManager(appDelegate: self)
-            openAIService = OpenAIService()
-            hotKeyManager = HotKeyManager(appDelegate: self)
-            
-            // 初始化熱鍵事件監聽（如果用戶已開啟）
-            setupHotKeyIfEnabled()
-            
-            // 如果需要，啟動剪貼板監控
-            if Task.supportsTaskLocality {
-                Task {
-                    let shouldMonitor = await AppState.shared.isMonitoringClipboard
-                    if shouldMonitor {
-                        pasteboardManager.startMonitoring()
-                    }
-                }
+    /// 初始化各個管理器
+    private func initializeManagers() {
+        // 初始化管理器
+        statusItemManager = StatusItemManager(appDelegate: self)
+        pasteboardManager = PasteboardManager(appDelegate: self)
+        textWindowManager = TextWindowManager(appDelegate: self)
+        openAIService = OpenAIService()
+        hotKeyManager = HotKeyManager(appDelegate: self)
+        
+        // 初始化熱鍵事件監聽（如果用戶已開啟）
+        setupHotKeyIfEnabled()
+        
+        // 如果需要，啟動剪貼板監控
+        Task {
+            let shouldMonitor = await AppState.shared.isClipboardMonitoringEnabled
+            if shouldMonitor {
+                pasteboardManager.startMonitoring()
             }
-        } catch {
-            // 處理特定錯誤
-            logger.error("初始化管理器失敗: \(error.localizedDescription)")
-            throw error  // 重新拋出錯誤，讓調用者處理
         }
     }
     
@@ -222,8 +200,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupHotKeyIfEnabled() {
         // 在隔離的上下文中檢查熱鍵設置
         Task {
-            let hotkeysEnabled = await AppState.shared.hotkeysEnabled
-            let hotkey = await AppState.shared.correctionHotkey
+            let hotkeysEnabled = await AppState.shared.isHotkeyActive
+            let hotkey = await AppState.shared.hotKeyCharacter
             
             if hotkeysEnabled && !hotkey.isEmpty {
                 DispatchQueue.main.async { [weak self] in
@@ -242,7 +220,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// 驗證API密鑰
     func validateApiKey() {
         Task {
-            let key = await AppState.shared.apiKey
+            let key = getOpenAIApiKey()
             // 僅當密鑰非空時才進行驗證
             if !key.isEmpty {
                 openAIService.validateAPIKey(key) { [weak self] isValid in
@@ -344,7 +322,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     /// 將原始文本發送到OpenAI進行處理
     func processTextWithOpenAI(text: String, completion: @escaping (Result<String, Error>) -> Void) {
-        openAIService.processText(
+        // 假設OpenAIService有一個processTextWithPrompt方法
+        openAIService.processTextWithPrompt(
             text: text,
             systemPrompt: systemPrompt,
             apiKey: getOpenAIApiKey(),
@@ -361,17 +340,20 @@ extension AppDelegate: NSWindowDelegate {
         
         if window == textWindow {
             logger.debug("文本窗口將要關閉")
-            AppState.shared.isTextWindowOpen = false
-            AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
+            Task {
+                await AppState.shared.updateWindowState(type: "text", isOpen: false)
+            }
             textWindow = nil
         } else if window == settingsWindow {
             logger.debug("設置窗口將要關閉")
-            AppState.shared.isSettingsWindowOpen = false
-            AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: false)
+            Task {
+                await AppState.shared.updateWindowState(type: "settings", isOpen: false)
+            }
         } else if window == swiftUIWindow {
             logger.debug("SwiftUI 文本窗口將要關閉")
-            AppState.shared.isTextWindowOpen = false
-            AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
+            Task {
+                await AppState.shared.updateWindowState(type: "text", isOpen: false)
+            }
             swiftUIWindow = nil
         }
     }
