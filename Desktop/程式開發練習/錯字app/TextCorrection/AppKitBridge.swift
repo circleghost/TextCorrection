@@ -36,7 +36,7 @@ class AppKitBridge: ObservableObject {
     init(appDelegate: AppDelegate? = nil) {
         self.appDelegate = appDelegate
         self.appState = AppState.shared
-        self.appStateObserver = AppStateObserver()
+        self.appStateObserver = AppStateObserver(appState: AppState.shared)
         
         logger.info("初始化AppKitBridge")
         
@@ -82,7 +82,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求顯示文本窗口")
         
         isTextWindowVisible = true
-        appStateObserver.updateWindowState(type: "text", isOpen: true)
+        appState.updateWindowState(type: "text", isOpen: true)
         appDelegate?.showTextWindow()
     }
     
@@ -91,7 +91,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求隱藏文本窗口")
         
         isTextWindowVisible = false
-        appStateObserver.updateWindowState(type: "text", isOpen: false)
+        appState.updateWindowState(type: "text", isOpen: false)
         appDelegate?.hideTextWindow()
     }
     
@@ -100,7 +100,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求顯示設置窗口")
         
         isSettingsWindowVisible = true
-        appStateObserver.updateWindowState(type: "settings", isOpen: true)
+        appState.updateWindowState(type: "settings", isOpen: true)
         appDelegate?.showSettings()
     }
     
@@ -109,7 +109,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求隱藏設置窗口")
         
         isSettingsWindowVisible = false
-        appStateObserver.updateWindowState(type: "settings", isOpen: false)
+        appState.updateWindowState(type: "settings", isOpen: false)
         appDelegate?.hideSettingsWindow()
     }
     
@@ -118,7 +118,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求顯示浮動按鈕")
         
         isFloatingButtonVisible = true
-        appStateObserver.updateWindowState(type: "floatingButton", isOpen: true)
+        appState.updateWindowState(type: "floatingButton", isOpen: true)
         appDelegate?.showFloatingButton()
     }
     
@@ -127,7 +127,7 @@ class AppKitBridge: ObservableObject {
         NSLog("AppKitBridge: 請求隱藏浮動按鈕")
         
         isFloatingButtonVisible = false
-        appStateObserver.updateWindowState(type: "floatingButton", isOpen: false)
+        appState.updateWindowState(type: "floatingButton", isOpen: false)
         appDelegate?.hideFloatingButton()
     }
     
