@@ -203,8 +203,9 @@ class HotKeyManager: @unchecked Sendable {
         logger.info("註冊熱鍵: \(keyModifiers.rawValue) + \(keyString)")
         
         if keyString.count == 1, let firstChar = keyString.first {
-            let keyEquivalent = KeyEquivalent(firstChar)
-            hotKey = HotKey(keyEquivalent: keyEquivalent, modifiers: keyModifiers)
+            // 將字元轉換為Key類型
+            let key = keyStringToKey(keyString)
+            hotKey = HotKey(key: key, modifiers: keyModifiers)
             hotKey?.keyDownHandler = { [weak self] in
                 self?.handleHotKeyPressed()
             }
@@ -216,8 +217,8 @@ class HotKeyManager: @unchecked Sendable {
                 
                 // 嘗試使用特殊按鍵處理
                 if keyString.lowercased() == "space" {
-                    let spaceKeyEquivalent = KeyEquivalent(" ")
-                    hotKey = HotKey(keyEquivalent: spaceKeyEquivalent, modifiers: keyModifiers)
+                    let spaceKey = Key.space
+                    hotKey = HotKey(key: spaceKey, modifiers: keyModifiers)
                     hotKey?.keyDownHandler = { [weak self] in
                         self?.handleHotKeyPressed()
                     }
@@ -228,15 +229,15 @@ class HotKeyManager: @unchecked Sendable {
                 }
             }
         } else if keyString.lowercased() == "space" {
-            // 直接使用空格字符
-            let spaceKeyEquivalent = KeyEquivalent(" ")
-            hotKey = HotKey(keyEquivalent: spaceKeyEquivalent, modifiers: keyModifiers)
+            // 直接使用空格鍵
+            let spaceKey = Key.space
+            hotKey = HotKey(key: spaceKey, modifiers: keyModifiers)
             hotKey?.keyDownHandler = { [weak self] in
                 self?.handleHotKeyPressed()
             }
             logger.info("空格鍵熱鍵註冊成功")
         } else {
-            logger.error("無法創建KeyEquivalent，熱鍵註冊失敗: 字串長度不為1或無效字符")
+            logger.error("無法創建Key，熱鍵註冊失敗: 字串長度不為1或無效字符")
             
             // 嘗試其他方法註冊
             registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
@@ -547,6 +548,65 @@ class HotKeyManager: @unchecked Sendable {
         if modifiers.contains(.command) { parts.append("⌘") }
         
         return parts.joined()
+    }
+    
+    // 將字符串轉換為Key類型
+    private func keyStringToKey(_ keyString: String) -> Key {
+        let lowerKey = keyString.lowercased()
+        
+        switch lowerKey {
+        case "a": return .a
+        case "b": return .b
+        case "c": return .c
+        case "d": return .d
+        case "e": return .e
+        case "f": return .f
+        case "g": return .g
+        case "h": return .h
+        case "i": return .i
+        case "j": return .j
+        case "k": return .k
+        case "l": return .l
+        case "m": return .m
+        case "n": return .n
+        case "o": return .o
+        case "p": return .p
+        case "q": return .q
+        case "r": return .r
+        case "s": return .s
+        case "t": return .t
+        case "u": return .u
+        case "v": return .v
+        case "w": return .w
+        case "x": return .x
+        case "y": return .y
+        case "z": return .z
+        case "0": return .zero
+        case "1": return .one
+        case "2": return .two
+        case "3": return .three
+        case "4": return .four
+        case "5": return .five
+        case "6": return .six
+        case "7": return .seven
+        case "8": return .eight
+        case "9": return .nine
+        case " ", "space": return .space
+        case ",": return .comma
+        case ".": return .period
+        case "/": return .slash
+        case ";": return .semicolon
+        case "'": return .quote
+        case "[": return .leftBracket
+        case "]": return .rightBracket
+        case "\\": return .backslash
+        case "-": return .minus
+        case "=": return .equal
+        case "`": return .grave
+        default:
+            logger.warning("未能將字符串轉換為指定Key: \(keyString)，使用空格鍵代替")
+            return .space
+        }
     }
     
     // 熱鍵設定變更通知
