@@ -134,7 +134,8 @@ class HotKeyManager: @unchecked Sendable {
         // 先確保沒有現有的熱鍵
         disableHotKey()
         
-        // 獲取熱鍵設定
+        // 使用線程安全的方式獲取熱鍵設定
+        // 在主線程上捕獲當前值，以避免在處理過程中變化
         let isActive = AppState.shared.isHotkeyActive
         let modifiers = AppState.shared.hotKeyModifiers
         let keyCharacter = AppState.shared.hotKeyCharacter
@@ -156,15 +157,20 @@ class HotKeyManager: @unchecked Sendable {
         // 檢查修飾鍵是否為空
         if modifiers.isEmpty {
             logger.warning("修飾鍵為空，無法設置熱鍵")
-            // 使用默認修飾鍵
-            AppState.shared.updateHotkeySettings(active: isActive, modifiers: ["shift", "control"])
+            // 使用默認修飾鍵，確保在主線程上更新
+            DispatchQueue.main.async {
+                AppState.shared.updateHotkeySettings(active: isActive, modifiers: ["shift", "control"])
+            }
             return
         }
         
         // 檢查主鍵是否為空
         if keyCharacter.isEmpty {
             logger.warning("主鍵為空，無法設置熱鍵")
-            AppState.shared.updateHotkeySettings(active: isActive, character: "space")
+            // 確保在主線程上更新
+            DispatchQueue.main.async {
+                AppState.shared.updateHotkeySettings(active: isActive, character: "space")
+            }
             return
         }
         
@@ -282,7 +288,9 @@ class HotKeyManager: @unchecked Sendable {
                     }
                     
                     // 確保熱鍵設定被暫時禁用，避免用戶困惑
-                    AppState.shared.updateHotkeySettings(active: false)
+                    DispatchQueue.main.async {
+                        AppState.shared.updateHotkeySettings(active: false)
+                    }
                 }
             }
         } else {

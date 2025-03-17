@@ -134,34 +134,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     /// 檢查輔助功能權限
+    @MainActor
     func checkAccessibilityPermissions() {
-        // 檢查是否擁有輔助功能權限
+        // 檢查是否已授予輔助功能權限
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
         let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
-        logger.info("輔助功能權限狀態: \(accessEnabled)")
-        
         if !accessEnabled {
-            // 沒有權限時，顯示提醒對話框
+            logger.warning("應用程式缺少輔助功能權限")
+            
+            // 顯示提示並提供快速連結到系統偏好設定
             let alert = NSAlert()
             alert.messageText = "需要輔助功能權限"
-            alert.informativeText = "為了能夠使用熱鍵功能，請在「系統設定」->「隱私與安全性」->「輔助使用」中允許本應用程式。\n\n授權後請重啟應用。"
+            alert.informativeText = "熱鍵功能和一些自動化操作需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。"
             alert.alertStyle = .warning
             alert.addButton(withTitle: "打開系統設定")
-            alert.addButton(withTitle: "以後再說")
+            alert.addButton(withTitle: "稍後設定")
             
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
                 // 打開系統偏好設定的輔助功能面板
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                    NSWorkspace.shared.open(url)
+                }
             }
-            
-            // 禁用熱鍵功能，避免用戶困惑
-            AppState.shared.updateHotkeySettings(active: false)
-            
-            logger.warning("輔助功能權限未獲授權，已臨時禁用熱鍵功能")
         } else {
-            logger.info("輔助功能權限已獲授權")
+            logger.info("應用程式已獲得輔助功能權限")
         }
     }
     
@@ -860,10 +858,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     // 添加新方法，專門用於熱鍵觸發的文本處理
+    @MainActor
     func directlyProcessHotkeySelection(_ text: String) {
-        logger.info("熱鍵觸發：直接處理選中文本，長度: \(text.count)")
-        
-        // 確保所有操作在主線程執行
+        // 確保在主線程上執行，因為這會更新UI
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -872,30 +869,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
-        // 以下代碼已確保在主線程執行
-        logger.info("[熱鍵觸發] 在主線程上執行UI操作")
+        logger.info("熱鍵觸發直接處理選中文本，長度: \(text.count)")
         
-        // 使用 AppState 安全更新方法
-        AppState.shared.safelyUpdate(\.originalText, value: text)
-        logger.info("[熱鍵觸發] 已安全更新 AppState 的原始文本")
+        // 通知PasteboardManager這是熱鍵觸發，不要顯示浮動按鈕
+        NotificationCenter.default.post(name: NSNotification.Name("HotkeyTriggered"), object: nil)
         
-        // 更新 AppDelegate 的原始文本
-        self.originalText = text
-        logger.info("[熱鍵觸發] 已更新 AppDelegate 的原始文本")
+        // 保存選中的文本
+        lastSelectedText = text
         
         // 顯示文本窗口
-        if let textWindowManager = self.textWindowManager {
-            logger.info("[熱鍵觸發] 使用 TextWindowManager 顯示文本窗口")
-            textWindowManager.showTextWindow(text: text)
-        } else {
-            logger.info("[熱鍵觸發] TextWindowManager 不存在，使用 showSwiftUITextWindow 替代")
-            showSwiftUITextWindow(text: text)
-        }
+        showTextCorrectionWindow(withText: text)
         
-        // 使用與懸浮按鈕相同的方法處理文本，避免不一致
-        logger.info("[熱鍵觸發] 使用 rewriteText 方法處理")
+        // 立即開始處理選中的文本
         rewriteText()
-        logger.info("[熱鍵觸發] 已調用 rewriteText 方法")
     }
 
     // 處理文本方法
