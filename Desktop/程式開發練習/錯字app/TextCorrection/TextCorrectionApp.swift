@@ -8,21 +8,23 @@
 import SwiftUI
 import AppKit
 import os.log
+import Combine
 
 @main
 struct TextCorrectionApp: App, @unchecked Sendable {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
-    // 創建AppState單例和AppStateObserver
+    // 創建AppState單例
     private let appState = AppState.shared
-    @StateObject private var appStateObserver: AppStateObserver
+    // 恢復AppStateObserver
+    @StateObject private var appStateObserver = AppStateObserver(appState: AppState.shared)
     
     // 添加日誌支持
     private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextCorrectionApp")
     
     init() {
-        // 先初始化AppStateObserver
-        self._appStateObserver = StateObject(wrappedValue: AppStateObserver(appState: AppState.shared))
+        // 先初始化已經在上面完成，這裡不需要重複
+        // self._appStateObserver = StateObject(wrappedValue: AppStateObserver(appState: AppState.shared))
         
         logger.info("TextCorrectionApp 初始化")
         
@@ -48,8 +50,6 @@ struct TextCorrectionApp: App, @unchecked Sendable {
         return Settings {
             EmptyView()
                 .environmentObject(appStateObserver)  // 提供ObservableObject給視圖層
-                .environment(\.appState, appState)    // 提供Actor給需要直接訪問的地方
-                .environment(\.appStateObserver, appStateObserver)  // 提供Observer給環境
                 .onAppear {
                     logger.info("TextCorrectionApp 視圖已出現")
                     

@@ -2,245 +2,194 @@
 // 該文件定義了 AppKit 與 SwiftUI 之間的橋接層
 
 import Foundation
-import SwiftUI
+import AppKit
 import Combine
-import Cocoa
+import SwiftUI
 import os.log
 
 /// AppKitBridge: 負責AppKit和SwiftUI之間的通信
 /// 提供一個統一的界面來處理跨架構的互動
-public class AppKitBridge: ObservableObject {
-    // 單例模式，簡化使用
-    public static let shared = AppKitBridge()
+@MainActor
+class AppKitBridge: ObservableObject {
+    // 單例實例
+    static let shared = AppKitBridge()
     
-    // 創建日誌對象
-    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppKitBridge")
-    
-    // 持有AppDelegate的弱引用
-    weak var appDelegate: AppDelegate?
-    
-    // 持有AppStateObserver的引用
-    private lazy var appStateObserver = AppStateObserver(appState: AppState.shared)
-    
-    // 訂閱集合，用於管理所有的Combine訂閱
-    private var cancellables = Set<AnyCancellable>()
-    
-    // 窗口顯示狀態
+    // 發布的屬性，用於SwiftUI綁定
     @Published var isTextWindowVisible: Bool = false
     @Published var isSettingsWindowVisible: Bool = false
     @Published var isFloatingButtonVisible: Bool = false
-    
-    // 剪貼板相關狀態
     @Published var hasCopiedText: Bool = false
     @Published var lastCopiedText: String = ""
-    
-    // 文本處理狀態（補充AppState中的內容）
     @Published var isTextBeingProcessed: Bool = false
     
-    // 私有初始化函數
-    private init() {
-        logger.info("AppKitBridge 初始化")
+    // 私有屬性
+    private var appDelegate: AppDelegate?
+    private var logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppKitBridge")
+    
+    // 使用AppState
+    private var appState: AppState
+    private var appStateObserver: AppStateObserver
+    private var cancellables = Set<AnyCancellable>()
+    
+    // MARK: - 初始化
+    
+    init(appDelegate: AppDelegate? = nil) {
+        self.appDelegate = appDelegate
+        self.appState = AppState.shared
+        self.appStateObserver = AppStateObserver()
         
-        // 從AppStateObserver訂閱相關數據變化
+        logger.info("初始化AppKitBridge")
+        
         setupSubscriptions()
     }
     
-    /// 設置與AppStateObserver的訂閱關係
-    private func setupSubscriptions() {
-        // 訂閱AppStateObserver的isProcessing狀態
-        appStateObserver.$isProcessing
-            .sink { [weak self] isProcessing in
-                guard let self = self else { return }
-                self.isTextBeingProcessed = isProcessing
-                self.logger.debug("文本處理狀態更新: \(isProcessing)")
-            }
-            .store(in: &cancellables)
-        
-        // 訂閱AppStateObserver的原始文本變化
-        appStateObserver.$originalText
-            .filter { !$0.isEmpty }
-            .sink { [weak self] text in
-                guard let self = self else { return }
-                self.logger.debug("收到新的原始文本，長度: \(text.count)字符")
-            }
-            .store(in: &cancellables)
-        
-        // 根據activeScreen訂閱窗口可見性狀態
-        appStateObserver.$activeScreen
-            .sink { [weak self] activeScreen in
-                guard let self = self else { return }
-                switch activeScreen {
-                case .textCorrection:
-                    self.isTextWindowVisible = true
-                    self.isSettingsWindowVisible = false
-                case .settings:
-                    self.isTextWindowVisible = false
-                    self.isSettingsWindowVisible = true
-                case .main:
-                    self.isTextWindowVisible = false
-                    self.isSettingsWindowVisible = false
-                }
-            }
-            .store(in: &cancellables)
-    }
+    // MARK: - 設置AppDelegate
     
     /// 設置AppDelegate引用
     func setAppDelegate(_ delegate: AppDelegate) {
-        self.appDelegate = delegate
-        logger.info("AppDelegate引用已設置")
+        logger.info("設置AppDelegate引用")
+        // 這個方法不需要實際做任何事情，因為我們已經通過計算屬性獲取AppDelegate
+        // 但是為了與TextCorrectionApp.swift中的調用兼容，我們保留這個方法
+    }
+    
+    // MARK: - 訂閱設置
+    
+    private func setupSubscriptions() {
+        // 訂閱AppState的isProcessing屬性
+        appState.$isProcessing
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isProcessing in
+                self?.isTextBeingProcessed = isProcessing
+            }
+            .store(in: &cancellables)
+        
+        // 訂閱AppState的windowStates屬性
+        appState.$windowStates
+            .receive(on: RunLoop.main)
+            .sink { [weak self] windowStates in
+                guard let self = self else { return }
+                self.isTextWindowVisible = windowStates["text"] ?? false
+                self.isSettingsWindowVisible = windowStates["settings"] ?? false
+                self.isFloatingButtonVisible = windowStates["floatingButton"] ?? false
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - 窗口管理方法
     
-    /// 顯示SwiftUI文本校正窗口
-    func showTextCorrectionWindow(withText text: String) {
-        logger.info("請求顯示文本校正窗口，文本長度: \(text.count)字符")
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let appDelegate = self.appDelegate else {
-                self?.logger.error("無法顯示文本校正窗口：AppDelegate為nil")
-                return
-            }
-            
-            // 更新AppState
-            Task {
-                await AppState.shared.updateTextInfo(originalText: text, correctedText: "")
-            }
-            
-            // 使用AppDelegate顯示窗口
-            appDelegate.showSwiftUITextWindow(text: text)
-            
-            // 更新窗口可見狀態
-            self.isTextWindowVisible = true
-        }
+    /// 顯示文本窗口
+    func showTextWindow() {
+        NSLog("AppKitBridge: 請求顯示文本窗口")
+        
+        isTextWindowVisible = true
+        appStateObserver.updateWindowState(type: "text", isOpen: true)
+        appDelegate?.showTextWindow()
+    }
+    
+    /// 隱藏文本窗口
+    func hideTextWindow() {
+        NSLog("AppKitBridge: 請求隱藏文本窗口")
+        
+        isTextWindowVisible = false
+        appStateObserver.updateWindowState(type: "text", isOpen: false)
+        appDelegate?.hideTextWindow()
     }
     
     /// 顯示設置窗口
     func showSettingsWindow() {
-        logger.info("請求顯示設置窗口")
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let appDelegate = self.appDelegate else {
-                self?.logger.error("無法顯示設置窗口：AppDelegate為nil")
-                return
-            }
-            
-            // 使用AppDelegate顯示窗口
-            appDelegate.showSettingsWindow()
-            
-            // 更新窗口可見狀態
-            self.isSettingsWindowVisible = true
-        }
+        NSLog("AppKitBridge: 請求顯示設置窗口")
+        
+        isSettingsWindowVisible = true
+        appStateObserver.updateWindowState(type: "settings", isOpen: true)
+        appDelegate?.showSettings()
+    }
+    
+    /// 隱藏設置窗口
+    func hideSettingsWindow() {
+        NSLog("AppKitBridge: 請求隱藏設置窗口")
+        
+        isSettingsWindowVisible = false
+        appStateObserver.updateWindowState(type: "settings", isOpen: false)
+        appDelegate?.hideSettingsWindow()
     }
     
     /// 顯示浮動按鈕
     func showFloatingButton() {
-        logger.info("請求顯示浮動按鈕")
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let appDelegate = self.appDelegate else {
-                self?.logger.error("無法顯示浮動按鈕：AppDelegate為nil")
-                return
-            }
-            
-            appDelegate.showFloatingButton()
-            self.isFloatingButtonVisible = true
-        }
+        NSLog("AppKitBridge: 請求顯示浮動按鈕")
+        
+        isFloatingButtonVisible = true
+        appStateObserver.updateWindowState(type: "floatingButton", isOpen: true)
+        appDelegate?.showFloatingButton()
     }
     
     /// 隱藏浮動按鈕
     func hideFloatingButton() {
-        logger.info("請求隱藏浮動按鈕")
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, let appDelegate = self.appDelegate else {
-                self?.logger.error("無法隱藏浮動按鈕：AppDelegate為nil")
-                return
-            }
-            
-            appDelegate.hideFloatingButton()
-            self.isFloatingButtonVisible = false
-        }
+        NSLog("AppKitBridge: 請求隱藏浮動按鈕")
+        
+        isFloatingButtonVisible = false
+        appStateObserver.updateWindowState(type: "floatingButton", isOpen: false)
+        appDelegate?.hideFloatingButton()
     }
     
-    // MARK: - 文本處理方法
+    // MARK: - 剪貼板處理方法
     
     /// 處理剪貼板文本
+    @MainActor
     func processClipboardText() {
-        logger.info("處理剪貼板文本")
+        NSLog("AppKitBridge: 處理剪貼板文本")
         
-        // 從剪貼板獲取文本
-        let pasteboard = NSPasteboard.general
-        guard let text = pasteboard.string(forType: .string), !text.isEmpty else {
-            logger.warning("剪貼板為空或不包含文本")
+        guard let clipboard = NSPasteboard.general.string(forType: .string) else {
+            NSLog("AppKitBridge: 剪貼板中沒有文本")
             return
         }
         
-        // 顯示文本窗口並處理文本
-        showTextCorrectionWindow(withText: text)
+        lastCopiedText = clipboard
+        hasCopiedText = true
         
-        // 觸發處理流程
-        if let appDelegate = appDelegate {
-            // 假設appDelegate具有相應的處理方法
-            appDelegate.processTextWithOpenAI(text: text) { [weak self] result in
-                switch result {
-                case .success(let correctedText):
-                    // 更新AppState
-                    Task {
-                        await AppState.shared.updateTextInfo(originalText: text, correctedText: correctedText)
-                    }
-                    self?.logger.info("文本處理成功，修正文本長度: \(correctedText.count)字符")
-                    
-                case .failure(let error):
-                    // 記錄錯誤
-                    self?.logger.error("文本處理失敗：\(error.localizedDescription)")
-                    
-                    // 更新錯誤狀態
-                    Task {
-                        await AppState.shared.updateErrorMessage(error.localizedDescription)
-                    }
-                }
+        if !clipboard.isEmpty {
+            NSLog("AppKitBridge: 剪貼板文本長度: \(clipboard.count)")
+            
+            Task {
+                await appDelegate?.processTextWithOpenAI(text: clipboard)
             }
         }
     }
     
-    /// 將校正後的文本複製到剪貼板並嘗試粘貼
-    func copyAndPasteRewritten() {
-        logger.info("開始複製校正文本到剪貼板")
+    /// 複製文本到剪貼板
+    func copyTextToClipboard(_ text: String) {
+        NSLog("AppKitBridge: 複製文本到剪貼板")
         
-        Task {
-            let correctedText = await AppState.shared.correctedText
-            
-            // 確保有校正後的文本
-            if correctedText.isEmpty {
-                logger.warning("沒有校正文本可以複製")
-                return
-            }
-            
-            // 複製到剪貼板
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(correctedText, forType: .string)
-            
-            logger.info("文本已複製到剪貼板，嘗試粘貼")
-            
-            // 嘗試模擬粘貼操作 (由於安全限制，這可能不總是有效)
-            // 使用AppleScript或其他方法可能會更可靠
-        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+    
+    // MARK: - 應用程序控制方法
+    
+    /// 退出應用程序
+    func quitApplication() {
+        NSLog("AppKitBridge: 請求退出應用程序")
+        NSApplication.shared.terminate(nil)
+    }
+    
+    /// 顯示關於窗口
+    func showAboutPanel() {
+        NSLog("AppKitBridge: 請求顯示關於窗口")
+        NSApplication.shared.orderFrontStandardAboutPanel(nil)
     }
     
     // MARK: - 調試方法
     
     /// 打印調試信息
     func printDebugState() {
-        logger.info("""
+        NSLog("""
         ----- AppKitBridge 調試信息 -----
-        窗口狀態:
-          - 文本窗口可見: \(isTextWindowVisible)
-          - 設置窗口可見: \(isSettingsWindowVisible)
-          - 浮動按鈕可見: \(isFloatingButtonVisible)
-        
-        剪貼板狀態:
-          - 已複製文本: \(hasCopiedText)
-          - 剪貼板文本長度: \(lastCopiedText.count)
-        
-        處理狀態:
-          - 正在處理文本: \(isTextBeingProcessed)
+        文本窗口可見: \(self.isTextWindowVisible)
+        設置窗口可見: \(self.isSettingsWindowVisible)
+        浮動按鈕可見: \(self.isFloatingButtonVisible)
+        剪貼板有文本: \(self.hasCopiedText)
+        剪貼板文本長度: \(self.lastCopiedText.count)
+        文本處理中: \(self.isTextBeingProcessed)
         ----- AppKitBridge 調試信息結束 -----
         """)
     }

@@ -97,7 +97,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, @unchecked
             
             // 初始化剪貼板管理器
             clipboardManager = PasteboardManager(appDelegate: self)
-            clipboardManager?.delegate = self
             
             // 啟動狀態訂閱
             setupStateSubscriptions()
@@ -177,8 +176,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, @unchecked
                             self.appState?.isApiKeyValid = isValid
                         }
                     }
-                } catch {
-                    logger.error("驗證API密鑰時出錯: \(error.localizedDescription)")
                 }
             }
         }

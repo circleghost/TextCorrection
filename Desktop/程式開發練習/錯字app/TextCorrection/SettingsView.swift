@@ -151,10 +151,20 @@ extension View {
 
 // MARK: - 主視圖
 struct SettingsView: View, @unchecked Sendable {
-    @EnvironmentObject private var appStateObserver: AppStateObserver
-    @Environment(\.appState) private var appState
+    // 暫時移除環境對象引用，使用本地狀態
+    // @EnvironmentObject private var appStateObserver: AppStateObserver
+    // @Environment(\.appState) private var appState
     
+    @State private var isVisualEffectsEnabled: Bool = true
+    @State private var isParticleEffectsEnabled: Bool = true
+    @State private var isHotkeyActive: Bool = false
+    @State private var correctionHotkeyString: String = ""
+    @State private var isClipboardMonitoringEnabled: Bool = false
+    @State private var fontSize: CGFloat = 14
+    @State private var isApiKeyValid: Bool = false
     @State private var apiKey: String = ""
+    @State private var isOpenAIServiceAvailable: Bool = true
+    
     @State private var showingAPIKeyDialog = false
     @State private var isValidatingApiKey = false
     @State private var selectedTab = 0
@@ -227,14 +237,24 @@ struct SettingsView: View, @unchecked Sendable {
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
         .onAppear {
-            // 從AppStateObserver加載當前設置
-            apiKey = appStateObserver.apiKey
+            // 從UserDefaults加載設置
+            let defaults = UserDefaults.standard
+            
+            isVisualEffectsEnabled = defaults.bool(forKey: "visualEffects")
+            isParticleEffectsEnabled = defaults.bool(forKey: "particleEffects")
+            isHotkeyActive = defaults.bool(forKey: "hotkeysEnabled")
+            correctionHotkeyString = defaults.string(forKey: "correctionHotkey") ?? ""
+            isClipboardMonitoringEnabled = defaults.bool(forKey: "clipboardMonitoring")
+            apiKey = defaults.string(forKey: "apiKey") ?? ""
+            fontSize = defaults.double(forKey: "fontSize") > 0 ? defaults.double(forKey: "fontSize") : 14
+            
+            // 驗證API密鑰
+            isApiKeyValid = !apiKey.isEmpty
             
             logger.debug("設置視圖已出現")
         }
         .sheet(isPresented: $showHotkeyCustomizationSheet) {
-            HotkeyCustomizationView()
-                .environmentObject(appStateObserver)
+            HotkeyCustomizationView(isHotkeyActive: $isHotkeyActive, hotkeyString: $correctionHotkeyString)
         }
         .frame(width: 500, height: 400)
     }
@@ -278,9 +298,9 @@ struct SettingsView: View, @unchecked Sendable {
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     Toggle(isOn: Binding(
-                        get: { appStateObserver.hotkeysEnabled },
+                        get: { isHotkeyActive },
                         set: { newValue in 
-                            appStateObserver.updateHotkeySettings(enabled: newValue, hotkey: appStateObserver.correctionHotkey)
+                            isHotkeyActive = newValue
                         }
                     )) {
                         Text("啟用熱鍵")
@@ -292,7 +312,7 @@ struct SettingsView: View, @unchecked Sendable {
                     HStack {
                         Text("校正文字:")
                         Spacer()
-                        Text(appStateObserver.correctionHotkey.isEmpty ? "尚未設置" : appStateObserver.correctionHotkey)
+                        Text(correctionHotkeyString.isEmpty ? "尚未設置" : correctionHotkeyString)
                             .font(UIConstants.bodyFont.weight(.medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -320,9 +340,9 @@ struct SettingsView: View, @unchecked Sendable {
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     Toggle(isOn: Binding(
-                        get: { appStateObserver.isMonitoringClipboard },
+                        get: { isClipboardMonitoringEnabled },
                         set: { newValue in 
-                            appStateObserver.updateClipboardMonitoring(newValue)
+                            isClipboardMonitoringEnabled = newValue
                         }
                     )) {
                         Text("監控剪貼板")
@@ -347,12 +367,12 @@ struct SettingsView: View, @unchecked Sendable {
                     HStack {
                         Text("字體大小")
                         Spacer()
-                        Text("\(Int(appStateObserver.fontSize))")
+                        Text("\(Int(fontSize))")
                             .frame(width: 30)
                         Stepper("", value: Binding(
-                            get: { appStateObserver.fontSize },
+                            get: { fontSize },
                             set: { newValue in 
-                                appStateObserver.updateFontSize(newValue)
+                                fontSize = newValue
                             }
                         ), in: 10...30, step: 1)
                     }
@@ -374,9 +394,9 @@ struct SettingsView: View, @unchecked Sendable {
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     Toggle(isOn: Binding(
-                        get: { appStateObserver.isVisualEffectsEnabled },
+                        get: { isVisualEffectsEnabled },
                         set: { newValue in 
-                            appStateObserver.updateVisualEffects(newValue)
+                            isVisualEffectsEnabled = newValue
                         }
                     )) {
                         Text("啟用視覺效果")
@@ -384,9 +404,9 @@ struct SettingsView: View, @unchecked Sendable {
                     .toggleStyle(LinearToggleStyle())
                     
                     Toggle(isOn: Binding(
-                        get: { appStateObserver.isParticleEffectsEnabled },
+                        get: { isParticleEffectsEnabled },
                         set: { newValue in 
-                            appStateObserver.updateParticleEffects(newValue)
+                            isParticleEffectsEnabled = newValue
                         }
                     )) {
                         Text("啟用粒子特效")
@@ -416,7 +436,7 @@ struct SettingsView: View, @unchecked Sendable {
                     HStack {
                         Text("API金鑰")
                         Spacer()
-                        if appStateObserver.isApiKeyValid {
+                        if isApiKeyValid {
                             Text("有效")
                                 .foregroundColor(.green)
                                 .font(UIConstants.bodyFont.weight(.medium))
@@ -428,7 +448,7 @@ struct SettingsView: View, @unchecked Sendable {
                     }
                     
                     // 不顯示實際金鑰，只顯示掩碼
-                    Text(maskApiKey(appStateObserver.apiKey))
+                    Text(maskApiKey(apiKey))
                         .font(.system(.body, design: .monospaced))
                         .foregroundColor(.secondary)
                         .padding(8)
@@ -456,7 +476,7 @@ struct SettingsView: View, @unchecked Sendable {
                     HStack {
                         Text("OpenAI服務")
                         Spacer()
-                        if appStateObserver.isOpenAIServiceAvailable {
+                        if isOpenAIServiceAvailable {
                             Text("可用")
                                 .foregroundColor(.green)
                                 .font(UIConstants.bodyFont.weight(.medium))
@@ -473,7 +493,7 @@ struct SettingsView: View, @unchecked Sendable {
                         
                         // 呼叫驗證API金鑰的方法
                         Task {
-                            let key = appStateObserver.apiKey
+                            let key = apiKey
                             if !key.isEmpty {
                                 await appState.validateApiConnection()
                             } else {
@@ -482,7 +502,7 @@ struct SettingsView: View, @unchecked Sendable {
                         }
                     }
                     .buttonStyle(LinearButtonStyle(isPrimary: true))
-                    .disabled(isValidatingApiKey || appStateObserver.apiKey.isEmpty)
+                    .disabled(isValidatingApiKey || apiKey.isEmpty)
                 }
                 .cardStyle()
             }
@@ -490,7 +510,6 @@ struct SettingsView: View, @unchecked Sendable {
         .padding(.bottom, UIConstants.spacing)
         .sheet(isPresented: $showingAPIKeyDialog) {
             ApiKeyInputView(apiKey: $apiKey)
-                .environmentObject(appStateObserver)
         }
     }
     
@@ -548,9 +567,15 @@ struct SettingsView: View, @unchecked Sendable {
     // MARK: - 功能方法
     private func resetSettings() {
         // 重置所有設定
-        Task {
-            await appState.resetSettings()
-        }
+        isVisualEffectsEnabled = true
+        isParticleEffectsEnabled = true
+        isHotkeyActive = false
+        correctionHotkeyString = ""
+        isClipboardMonitoringEnabled = false
+        fontSize = 14
+        apiKey = ""
+        isApiKeyValid = false
+        
         logger.debug("重置所有設定")
     }
     
@@ -579,8 +604,9 @@ struct ApiKeyInputView: View {
     @Binding var apiKey: String
     @State private var inputKey: String = ""
     @Environment(\.presentationMode) var presentationMode
-    @EnvironmentObject private var appStateObserver: AppStateObserver
-    @Environment(\.appState) private var appState
+    // 暫時移除環境對象引用
+    // @EnvironmentObject private var appStateObserver: AppStateObserver
+    // @Environment(\.appState) private var appState
     
     var body: some View {
         VStack(spacing: 20) {
@@ -622,18 +648,18 @@ struct ApiKeyInputView: View {
     private func saveApiKey() {
         apiKey = inputKey
         
-        // 更新 AppState
-        appStateObserver.updateApiKey(apiKey)
+        // 更新 AppState - 暫時移除
+        // appStateObserver.updateApiKey(apiKey)
         
         // 儲存到 Keychain
         do {
             let keychain = Keychain(service: "com.yourcompany.TextCorrection")
             try keychain.set(apiKey, key: "OpenAIApiKey")
             
-            // 自動驗證新的API金鑰
-            Task {
-                await appState.validateApiKey(apiKey)
-            }
+            // 自動驗證新的API金鑰 - 暫時移除
+            // Task {
+            //     await appState.validateApiKey(apiKey)
+            // }
         } catch {
             print("無法儲存 API 金鑰：\(error)")
         }
@@ -644,12 +670,17 @@ struct ApiKeyInputView: View {
 
 // MARK: - 熱鍵自定義視圖
 struct HotkeyCustomizationView: View {
-    @EnvironmentObject private var appStateObserver: AppStateObserver
-    @Environment(\.appState) private var appState
+    // 暫時移除環境對象引用
+    // @EnvironmentObject private var appStateObserver: AppStateObserver
+    // @Environment(\.appState) private var appState
     @Environment(\.presentationMode) var presentationMode
     
     @State private var selectedModifiers: [String] = []
     @State private var selectedKey: String = ""
+    
+    // 添加綁定屬性
+    @Binding var isHotkeyActive: Bool
+    @Binding var hotkeyString: String
     
     private let availableModifiers = ["⌘", "⌥", "⌃", "⇧"]
     private let availableKeys = [
@@ -758,7 +789,7 @@ struct HotkeyCustomizationView: View {
     }
     
     private func loadCurrentHotkey() {
-        let currentHotkey = appStateObserver.correctionHotkey
+        let currentHotkey = hotkeyString
         
         if !currentHotkey.isEmpty {
             // 解析當前熱鍵
@@ -784,10 +815,11 @@ struct HotkeyCustomizationView: View {
     
     private func saveHotkey() {
         // 創建熱鍵字符串
-        let hotkeyString = selectedModifiers.joined(separator: "+") + "+" + selectedKey
+        let newHotkeyString = selectedModifiers.joined(separator: "+") + "+" + selectedKey
         
-        // 更新AppState
-        appStateObserver.updateHotkeySettings(enabled: true, hotkey: hotkeyString)
+        // 更新綁定屬性
+        hotkeyString = newHotkeyString
+        isHotkeyActive = true
         
         // 關閉視圖
         presentationMode.wrappedValue.dismiss()
@@ -801,7 +833,9 @@ struct HotkeyCustomizationView: View {
     }
 }
 
-#Preview {
-    SettingsView()
-        .environmentObject(AppStateObserver.shared)
+struct SettingsView_Previews: PreviewProvider {
+    static var previews: some View {
+        SettingsView()
+            .environmentObject(AppStateObserver(appState: AppState.shared))
+    }
 }

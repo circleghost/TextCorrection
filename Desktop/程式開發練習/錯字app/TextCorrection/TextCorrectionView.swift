@@ -246,10 +246,21 @@ struct ParticleEffectView: View {
 
 /// 主文本校正視圖
 struct TextCorrectionView: View, @unchecked Sendable {
-    // 使用AppStateObserver而不是AppState
-    @EnvironmentObject private var appStateObserver: AppStateObserver
-    // 使用環境鍵訪問AppState actor
-    @Environment(\.appState) private var appState
+    // 暫時移除AppStateObserver
+    // @EnvironmentObject var appStateObserver: AppStateObserver
+    // @Environment(\.appState) private var appState
+    
+    // 添加本地狀態變量
+    @State private var originalText: String = ""
+    @State private var correctedText: String = ""
+    @State private var isProcessing: Bool = false
+    @State private var changedWordsCount: Int = 0
+    @State private var textProcessingTime: Double = 0.0
+    @State private var originalCharacterCount: Int = 0
+    @State private var correctedCharacterCount: Int = 0
+    @State private var isVisualEffectsEnabled: Bool = true
+    @State private var isParticleEffectsEnabled: Bool = true
+    @State private var lastError: String = ""
     
     @State private var showingSettings = false
     @State private var showCopySuccessIndicator = false
@@ -259,14 +270,18 @@ struct TextCorrectionView: View, @unchecked Sendable {
     // 添加日誌支持
     private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextCorrectionView")
     
-    // 添加初始化文本的構造器
-    init(text: String = "") {
-        // 為了確保一致性，如果提供了文本，我們使用一個onAppear的任務
-        _activeText = State(initialValue: text)
+    // 用於跟踪當前活動的文本
+    @State private var activeText: ActiveText = .original
+    
+    // 定義一個枚舉來跟踪當前活動的文本
+    enum ActiveText {
+        case original
+        case corrected
     }
     
-    // 用於存儲當前顯示的文本
-    @State private var activeText: String = ""
+    init() {
+        logger.info("TextCorrectionView 已初始化")
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -303,14 +318,14 @@ struct TextCorrectionView: View, @unchecked Sendable {
                 )
                 
                 // 僅當啟用視覺效果時顯示流光效果
-                if appStateObserver.isVisualEffectsEnabled {
+                if isVisualEffectsEnabled {
                     FlowingGlowView()
                         .opacity(0.15)
                 }
                 
                 VStack(spacing: 15) {
                     // 文本顯示區域
-                    if appStateObserver.isProcessing {
+                    if isProcessing {
                         ProgressView {
                             Text("處理中...")
                                 .foregroundColor(.white)
@@ -319,17 +334,17 @@ struct TextCorrectionView: View, @unchecked Sendable {
                         .padding()
                         .scaleEffect(1.2)
                     
-                        if !appStateObserver.lastError.isEmpty {
-                            Text("發生錯誤：\(appStateObserver.lastError)")
+                        if !lastError.isEmpty {
+                            Text("發生錯誤：\(lastError)")
                                 .foregroundColor(.red)
                                 .padding()
                                 .transition(.scale.combined(with: .opacity))
                         }
-                    } else if !appStateObserver.correctedText.isEmpty {
+                    } else if !correctedText.isEmpty {
                         ZStack {
                             TextDifferenceView(
-                                originalText: appStateObserver.originalText,
-                                correctedText: appStateObserver.correctedText
+                                originalText: originalText,
+                                correctedText: correctedText
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(
@@ -344,7 +359,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                 withAnimation {
                                     isTextVisible = true
                                 }
-                                showParticles = appStateObserver.isParticleEffectsEnabled
+                                showParticles = isParticleEffectsEnabled
                             }
                             
                             // 粒子效果層
@@ -355,6 +370,50 @@ struct TextCorrectionView: View, @unchecked Sendable {
                             }
                         }
                     } else {
+                        // 原始文本和校正後的文本
+                        HStack(spacing: 20) {
+                            // 原始文本
+                            VStack {
+                                Text("原始文本")
+                                    .font(.headline)
+                                
+                                TextEditor(text: $originalText)
+                                    .font(.system(size: 14))
+                                    .frame(minHeight: 200)
+                                    .padding(10)
+                                    .background(Color(.textBackgroundColor))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(activeText == .original ? Color.blue : Color.gray, lineWidth: 2)
+                                    )
+                                    .onTapGesture {
+                                        activeText = .original
+                                    }
+                            }
+                            
+                            // 校正後的文本
+                            VStack {
+                                Text("校正後的文本")
+                                    .font(.headline)
+                                
+                                TextEditor(text: $correctedText)
+                                    .font(.system(size: 14))
+                                    .frame(minHeight: 200)
+                                    .padding(10)
+                                    .background(Color(.textBackgroundColor))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(activeText == .corrected ? Color.blue : Color.gray, lineWidth: 2)
+                                    )
+                                    .onTapGesture {
+                                        activeText = .corrected
+                                    }
+                            }
+                        }
+                        .padding(.horizontal)
+                        
                         // 初始狀態或等待文本輸入
                         VStack(spacing: 20) {
                             Image(systemName: "text.bubble")
@@ -366,7 +425,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                 .foregroundColor(.gray)
                             
                             // 如果有初始文本，在視圖出現時設置
-                            if !activeText.isEmpty {
+                            if !originalText.isEmpty {
                                 Text("正在載入...")
                                     .font(.subheadline)
                                     .foregroundColor(.gray.opacity(0.7))
@@ -384,7 +443,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                     // 狀態與控制區域
                     HStack {
                         // 為底部區域添加光暈效果
-                        if appStateObserver.isVisualEffectsEnabled && !appStateObserver.correctedText.isEmpty {
+                        if isVisualEffectsEnabled && !correctedText.isEmpty {
                             Circle()
                                 .fill(
                                     RadialGradient(
@@ -400,13 +459,13 @@ struct TextCorrectionView: View, @unchecked Sendable {
                         }
                         
                         // 顯示處理數據
-                        if !appStateObserver.correctedText.isEmpty {
+                        if !correctedText.isEmpty {
                             HStack(spacing: 15) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("字符")
                                         .font(.system(size: 10))
                                         .foregroundColor(.gray)
-                                    Text("\(appStateObserver.originalCharacterCount) → \(appStateObserver.correctedCharacterCount)")
+                                    Text("\(originalCharacterCount) → \(correctedCharacterCount)")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.white)
                                 }
@@ -415,7 +474,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                     Text("更改字數")
                                         .font(.system(size: 10))
                                         .foregroundColor(.gray)
-                                    Text("\(appStateObserver.changedWordsCount)")
+                                    Text("\(changedWordsCount)")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.white)
                                 }
@@ -424,7 +483,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                     Text("處理時間")
                                         .font(.system(size: 10))
                                         .foregroundColor(.gray)
-                                    Text("\(String(format: "%.2f", appStateObserver.textProcessingTime))秒")
+                                    Text("\(String(format: "%.2f", textProcessingTime))秒")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(.white)
                                 }
@@ -434,7 +493,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                         Spacer()
                         
                         // 複製按鈕
-                        if !appStateObserver.correctedText.isEmpty {
+                        if !correctedText.isEmpty {
                             Button(action: {
                                 copyText()
                             }) {
@@ -500,24 +559,32 @@ struct TextCorrectionView: View, @unchecked Sendable {
         .frame(minWidth: 500, minHeight: 300)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .environmentObject(appStateObserver)
+                // .environmentObject(appStateObserver)
         }
         .onAppear {
             logger.debug("TextCorrectionView 出現")
             
-            // 如果有初始文本，設置它
-            if !activeText.isEmpty {
-                Task {
-                    // 使用actor直接設置原始文本
-                    await appState.updateTextInfo(originalText: activeText, correctedText: "")
-                }
-            }
+            // 從UserDefaults加載設置
+            loadSettings()
+            
+            // 設置初始值
+            activeText = .original
+            originalText = ""
             
             // 更新窗口狀態
             Task {
-                await appState.setActiveScreen(.textCorrection)
+                // await appState.setActiveScreen(.textCorrection)
             }
         }
+    }
+    
+    // 加載設置
+    private func loadSettings() {
+        let defaults = UserDefaults.standard
+        isVisualEffectsEnabled = defaults.bool(forKey: "isVisualEffectsEnabled")
+        isParticleEffectsEnabled = defaults.bool(forKey: "isParticleEffectsEnabled")
+        
+        logger.info("已加載設置: 視覺效果=\(isVisualEffectsEnabled), 粒子效果=\(isParticleEffectsEnabled)")
     }
     
     // 顯示設置視圖
@@ -527,7 +594,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
     
     // 複製已校正的文本
     private func copyText() {
-        let text = appStateObserver.correctedText
+        let text = correctedText
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         
@@ -543,14 +610,14 @@ struct TextCorrectionView: View, @unchecked Sendable {
             }
         }
         
-        // 發送複製成功通知
-        Task {
-            await appState.addNotification(type: .success, message: "文本已複製到剪貼板！")
-        }
+        // 發送複製成功通知 - 暫時移除
+        // Task {
+        //     await appState.addNotification(type: .success, message: "文本已複製到剪貼板！")
+        // }
     }
 }
 
 #Preview {
     TextCorrectionView()
-        .environmentObject(AppState.shared)
+        // .environmentObject(AppState.shared)
 } 

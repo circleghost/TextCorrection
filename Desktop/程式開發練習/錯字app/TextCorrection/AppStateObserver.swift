@@ -3,18 +3,19 @@ import SwiftUI
 import Combine
 import os.log
 
-/// AppStateObserver 作為SwiftUI視圖的數據源，代理AppState actor
-@MainActor
+/// AppStateObserver: 作為SwiftUI視圖的數據源，觀察AppState的變化
 class AppStateObserver: ObservableObject {
+    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppStateObserver")
+    
     // MARK: - 已發布的屬性
     
     // 基本設置
-    @Published var isVisualEffectsEnabled: Bool = false
-    @Published var isParticleEffectsEnabled: Bool = false
+    @Published var isVisualEffectsEnabled: Bool = true
+    @Published var isParticleEffectsEnabled: Bool = true
     @Published var isApiKeyValid: Bool = false
     @Published var isProcessing: Bool = false
     @Published var isOpenAIServiceAvailable: Bool = true
-    @Published var isMonitoringClipboard: Bool = false
+    @Published var isClipboardMonitoringEnabled: Bool = false
     
     // 文本相關
     @Published var originalText: String = ""
@@ -26,223 +27,169 @@ class AppStateObserver: ObservableObject {
     
     // 通知和UI狀態
     @Published var notifications: [AppNotification] = []
-    @Published var activeScreen: ActiveScreen = .main
+    @Published var activeScreen: ActiveScreen = .text
     @Published var lastError: String = ""
     @Published var statusMessage: String = ""
     
     // 熱鍵設置
-    @Published var hotkeysEnabled: Bool = false
-    @Published var correctionHotkey: String = ""
+    @Published var isHotkeyActive: Bool = false
+    @Published var correctionHotkeyString: String = ""
     
     // 其他設置
     @Published var apiKey: String = ""
-    @Published var fontSize: CGFloat = 12.0
+    @Published var fontSize: CGFloat = 14
+    
+    // 窗口狀態
+    @Published var windowStates: [String: Bool] = [
+        "text": false,
+        "settings": false,
+        "floatingButton": false
+    ]
     
     // MARK: - 私有屬性
     
-    /// 用於監視AppState變化的任務
-    private var monitorTask: Task<Void, Never>?
+    private var appState: AppState
+    private var cancellables = Set<AnyCancellable>()
+    private var updateTimer: Timer?
     
-    /// 用於被監視的AppState實例
-    private let appState: AppState
+    // MARK: - 初始化
     
-    // MARK: - 初始化與反初始化
-    
-    /// 初始化一個新的AppStateObserver實例
-    /// - Parameter appState: 要觀察的AppState實例
-    init(appState: AppState) {
+    init(appState: AppState = AppState.shared) {
         self.appState = appState
-        // 啟動監視AppState變更的任務
-        startMonitoring()
+        logger.info("初始化AppStateObserver")
+        startObservingAppState()
     }
     
     deinit {
-        // 取消監視任務
-        monitorTask?.cancel()
+        stopObservingAppState()
     }
     
-    // MARK: - 監視方法
+    // MARK: - 觀察方法
     
-    /// 開始監視AppState的變更
-    private func startMonitoring() {
-        monitorTask = Task { [weak self] in
-            guard let self = self else { return }
-            // 每50毫秒檢查一次狀態更新
-            while !Task.isCancelled {
-                await self.updateFromAppState()
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50毫秒
-            }
+    /// 開始觀察AppState
+    func startObservingAppState() {
+        logger.info("開始觀察AppState")
+        
+        // 立即更新一次
+        updateFromAppState()
+        
+        // 設置定時器定期更新
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.updateFromAppState()
         }
     }
     
-    /// 從AppState更新所有屬性
+    /// 停止觀察AppState
+    func stopObservingAppState() {
+        logger.info("停止觀察AppState")
+        
+        updateTimer?.invalidate()
+        updateTimer = nil
+        cancellables.removeAll()
+    }
+    
+    /// 從AppState更新數據
     @MainActor
-    private func updateFromAppState() async {
+    func updateFromAppState() {
         // 基本設置
-        self.isVisualEffectsEnabled = await appState.isVisualEffectsEnabled
-        self.isParticleEffectsEnabled = await appState.isParticleEffectsEnabled
-        self.isApiKeyValid = await appState.isApiKeyValid
-        self.isProcessing = await appState.isProcessing
-        self.isOpenAIServiceAvailable = await appState.isOpenAIServiceAvailable
-        self.isMonitoringClipboard = await appState.isMonitoringClipboard
+        isVisualEffectsEnabled = appState.isVisualEffectsEnabled
+        isParticleEffectsEnabled = appState.isParticleEffectsEnabled
+        isApiKeyValid = appState.isApiKeyValid
+        isProcessing = appState.isProcessing
+        isOpenAIServiceAvailable = appState.isOpenAIServiceAvailable
+        isClipboardMonitoringEnabled = appState.isClipboardMonitoringEnabled
         
         // 文本相關
-        self.originalText = await appState.originalText
-        self.correctedText = await appState.correctedText
-        self.changedWordsCount = await appState.changedWordsCount
-        self.textProcessingTime = await appState.textProcessingTime
-        self.originalCharacterCount = await appState.originalCharacterCount
-        self.correctedCharacterCount = await appState.correctedCharacterCount
+        originalText = appState.originalText
+        correctedText = appState.correctedText
+        changedWordsCount = appState.changedWordsCount
+        textProcessingTime = appState.textProcessingTime
+        originalCharacterCount = appState.originalCharacterCount
+        correctedCharacterCount = appState.correctedCharacterCount
         
         // 通知和UI狀態
-        self.notifications = await appState.notifications
-        self.activeScreen = await appState.activeScreen
-        self.lastError = await appState.lastError
-        self.statusMessage = await appState.statusMessage
+        notifications = appState.notifications
+        activeScreen = appState.activeScreen
+        statusMessage = appState.statusMessage
         
         // 熱鍵設置
-        self.hotkeysEnabled = await appState.hotkeysEnabled
-        self.correctionHotkey = await appState.correctionHotkey
+        isHotkeyActive = appState.isHotkeyActive
+        correctionHotkeyString = appState.correctionHotkeyString
         
         // 其他設置
-        self.apiKey = await appState.apiKey
-        self.fontSize = await appState.fontSize
+        apiKey = appState.apiKey
+        fontSize = appState.fontSize
+        
+        // 窗口狀態
+        windowStates = appState.windowStates
     }
     
-    // MARK: - 操作方法
+    // MARK: - 更新AppState的方法
     
-    /// 更新視覺效果設置
-    func updateVisualEffects(_ enabled: Bool) {
+    func updateVisualEffects(enabled: Bool) {
         Task {
-            await appState.updateVisualEffects(enabled)
+            await AppState.shared.updateVisualEffects(enabled: enabled)
         }
     }
     
-    /// 更新粒子效果設置
-    func updateParticleEffects(_ enabled: Bool) {
+    func updateParticleEffects(enabled: Bool) {
         Task {
-            await appState.updateParticleEffects(enabled)
+            await AppState.shared.updateParticleEffects(enabled: enabled)
         }
     }
     
-    /// 更新API密鑰
+    func updateHotkeySettings(enabled: Bool) {
+        Task {
+            await AppState.shared.updateHotkeySettings(enabled: enabled)
+        }
+    }
+    
+    func updateClipboardMonitoring(enabled: Bool) {
+        Task {
+            await AppState.shared.updateClipboardMonitoring(enabled: enabled)
+        }
+    }
+    
     func updateApiKey(_ key: String) {
         Task {
-            await appState.updateApiKey(key)
+            await AppState.shared.updateApiKey(key)
         }
     }
     
-    /// 更新熱鍵設置
-    func updateHotkeySettings(enabled: Bool, hotkey: String = "") {
-        Task {
-            await appState.updateHotkeySettings(enabled: enabled, hotkey: hotkey)
-        }
-    }
-    
-    /// 更新剪貼板監控設置
-    func updateClipboardMonitoring(_ enabled: Bool) {
-        Task {
-            await appState.updateClipboardMonitoring(enabled)
-        }
-    }
-    
-    /// 更新字體大小
     func updateFontSize(_ size: CGFloat) {
         Task {
-            await appState.updateFontSize(size)
+            await AppState.shared.updateFontSize(size)
         }
     }
     
-    /// 更新處理狀態
-    func updateProcessingStatus(_ isProcessing: Bool) {
-        Task {
-            await appState.updateProcessingStatus(isProcessing)
-        }
-    }
-    
-    /// 更新OpenAI服務可用性
-    func updateOpenAIServiceAvailability(_ isAvailable: Bool) {
-        Task {
-            await appState.updateOpenAIServiceAvailability(isAvailable)
-        }
-    }
-    
-    /// 更新錯誤訊息
-    func updateErrorMessage(_ message: String) {
-        Task {
-            await appState.updateErrorMessage(message)
-        }
-    }
-    
-    /// 更新狀態訊息
-    func updateStatusMessage(_ message: String) {
-        Task {
-            await appState.updateStatusMessage(message)
-        }
-    }
-    
-    /// 設置活動螢幕
-    func setActiveScreen(_ screen: ActiveScreen) {
-        Task {
-            await appState.setActiveScreen(screen)
-        }
-    }
-    
-    /// 更新文本信息
-    func updateTextInfo(originalText: String, correctedText: String) {
-        Task {
-            await appState.updateTextInfo(originalText: originalText, correctedText: correctedText)
-        }
-    }
-    
-    /// 更新文本統計信息
-    func updateTextStats(originalCharCount: Int, correctedCharCount: Int, processingTime: TimeInterval) {
-        Task {
-            await appState.updateTextStats(originalCharCount: originalCharCount, 
-                                         correctedCharCount: correctedCharCount, 
-                                         processingTime: processingTime)
-        }
-    }
-    
-    /// 添加通知
-    func addNotification(type: NotificationType, message: String) {
-        Task {
-            await appState.addNotification(type: type, message: message)
-        }
-    }
-    
-    /// 移除通知
-    func removeNotification(id: UUID) {
-        Task {
-            await appState.removeNotification(id: id)
-        }
-    }
-    
-    /// 清除所有通知
-    func clearAllNotifications() {
-        Task {
-            await appState.clearAllNotifications()
-        }
-    }
-    
-    /// 重置設置
     func resetSettings() {
         Task {
-            await appState.resetSettings()
+            await AppState.shared.resetSettings()
         }
     }
     
-    /// 重置狀態
-    func resetState() {
+    func clearNotifications() {
         Task {
-            await appState.resetState()
+            await AppState.shared.clearAllNotifications()
         }
     }
     
-    /// 調試狀態打印
-    func printDebugState() {
+    func removeNotification(id: UUID) {
         Task {
-            await appState.printDebugState()
+            await AppState.shared.removeNotification(id: id)
         }
     }
-} 
+    
+    /// 設置活動屏幕
+    func setActiveScreen(_ screen: ActiveScreen) {
+        AppState.shared.setActiveScreen(screen)
+    }
+    
+    /// 更新窗口狀態
+    func updateWindowState(type: String, isOpen: Bool) {
+        AppState.shared.updateWindowState(type: type, isOpen: isOpen)
+    }
+}
+
+// 使用AppState.swift中已定義的類型，不再重複定義
+// ActiveScreen, NotificationType, 和 AppNotification 已在 AppState.swift 中定義
