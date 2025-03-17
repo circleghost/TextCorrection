@@ -5,6 +5,7 @@ import HotKey
 import KeychainAccess
 import os.log
 import Combine
+import ApplicationServices
 
 // 確保在整個檔案都可以使用 AppState
 import Foundation
@@ -92,12 +93,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
     
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 使用 do-catch 處理初始化過程中可能的錯誤
         do {
-            // 將啟動策略改為 .regular，使應用程式在 Dock 中顯示
-            NSApp.setActivationPolicy(.regular)
-            
             logger.info("應用程式啟動")
+            
+            // 檢查輔助功能權限
+            checkAccessibilityPermissions()
             
             // 設置AppKitBridge的AppDelegate引用
             AppKitBridge.shared.setAppDelegate(self)
@@ -117,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // 打印初始狀態（用於調試）
             AppState.shared.printDebugState()
             AppKitBridge.shared.printDebugState()
-            } catch {
+        } catch {
             // 處理啟動過程中的任何錯誤
             logger.error("應用程式啟動失敗: \(error.localizedDescription)")
             
@@ -128,6 +130,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alert.alertStyle = .critical
             alert.addButton(withTitle: "確定")
             alert.runModal()
+        }
+    }
+    
+    /// 檢查輔助功能權限
+    func checkAccessibilityPermissions() {
+        // 檢查是否擁有輔助功能權限
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        
+        logger.info("輔助功能權限狀態: \(accessEnabled)")
+        
+        if !accessEnabled {
+            // 沒有權限時，顯示提醒對話框
+            let alert = NSAlert()
+            alert.messageText = "需要輔助功能權限"
+            alert.informativeText = "為了能夠使用熱鍵功能，請在「系統設定」->「隱私與安全性」->「輔助使用」中允許本應用程式。\n\n授權後請重啟應用。"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "打開系統設定")
+            alert.addButton(withTitle: "以後再說")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // 打開系統偏好設定的輔助功能面板
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            }
+            
+            // 禁用熱鍵功能，避免用戶困惑
+            AppState.shared.updateHotkeySettings(active: false)
+            
+            logger.warning("輔助功能權限未獲授權，已臨時禁用熱鍵功能")
+        } else {
+            logger.info("輔助功能權限已獲授權")
         }
     }
     

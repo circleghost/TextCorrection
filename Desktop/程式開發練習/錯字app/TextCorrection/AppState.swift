@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import os.log
+import ApplicationServices
 
 /// 應用程式狀態管理中心
 class AppState: ObservableObject, @unchecked Sendable {
@@ -117,6 +118,65 @@ class AppState: ObservableObject, @unchecked Sendable {
     ///   - modifiers: 修飾鍵陣列
     ///   - character: 主鍵字符
     func updateHotkeySettings(active: Bool, modifiers: [String]? = nil, character: String? = nil) {
+        // 如果要啟用熱鍵，先檢查權限
+        if active {
+            // 檢查輔助功能權限
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+            let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
+            
+            if !accessEnabled {
+                logger.warning("嘗試啟用熱鍵但缺少輔助功能權限")
+                
+                // 在主線程上顯示權限請求對話框
+                DispatchQueue.main.async {
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        appDelegate.checkAccessibilityPermissions()
+                    } else {
+                        // 如果無法獲取 AppDelegate，直接顯示提示
+                        let alert = NSAlert()
+                        alert.messageText = "需要輔助功能權限"
+                        alert.informativeText = "熱鍵功能需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。授權後請重啟應用。"
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "打開系統設定")
+                        alert.addButton(withTitle: "取消")
+                        
+                        if alert.runModal() == .alertFirstButtonReturn {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                    }
+                }
+                
+                // 返回前將 active 設為 false，避免啟用時沒有權限
+                // 使用專用的熱鍵隊列來確保線程安全
+                hotKeyQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    
+                    // 將更新操作派發到主線程
+                    DispatchQueue.main.async {
+                        // 設定禁用狀態
+                        self.isHotkeyActive = false
+                        
+                        if let modifiers = modifiers {
+                            self.hotKeyModifiers = modifiers
+                        }
+                        
+                        if let character = character {
+                            self.hotKeyCharacter = character
+                        }
+                        
+                        self.saveSettings()
+                        
+                        // 發送熱鍵設定變更通知
+                        NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
+                        
+                        self.logger.debug("熱鍵設定已更新(禁用，因權限不足): 狀態=false, 修飾鍵=\(self.hotKeyModifiers), 主鍵=\(self.hotKeyCharacter)")
+                    }
+                }
+                
+                return
+            }
+        }
+        
         // 使用專用的熱鍵隊列來確保線程安全
         hotKeyQueue.async { [weak self] in
             guard let self = self else { return }
