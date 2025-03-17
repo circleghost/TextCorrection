@@ -212,116 +212,33 @@ class AppState: ObservableObject, @unchecked Sendable {
     
     /// 更新熱鍵設定，包含狀態、修飾鍵和主鍵
     /// - Parameters:
-    ///   - active: 是否啟用熱鍵
+    ///   - isActive: 是否啟用熱鍵
     ///   - modifiers: 修飾鍵陣列
     ///   - character: 主鍵字符
-    func updateHotkeySettings(active: Bool, modifiers: [String]? = nil, character: String? = nil) {
-        logger.info("🔄 正在更新熱鍵設定: active=\(active), modifiers=\(modifiers?.description ?? "未變更"), character=\(character ?? "未變更")")
-        
-        // 如果要啟用熱鍵，先檢查權限
-        if active {
-            // 檢查輔助功能權限
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
-            let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
-            
-            if !accessEnabled {
-                logger.warning("⚠️ 嘗試啟用熱鍵但缺少輔助功能權限")
-                
-                // 在主線程上顯示權限請求對話框
-                DispatchQueue.main.async {
-                    if let appDelegate = NSApp.delegate as? AppDelegate {
-                        appDelegate.checkAccessibilityPermissions()
-                    } else {
-                        // 如果無法獲取 AppDelegate，直接顯示提示
-                        let alert = NSAlert()
-                        alert.messageText = "需要輔助功能權限"
-                        alert.informativeText = "熱鍵功能需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。授權後請重啟應用。"
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "打開系統設定")
-                        alert.addButton(withTitle: "取消")
-                        
-                        if alert.runModal() == .alertFirstButtonReturn {
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                        }
-                    }
-                }
-                
-                // 返回前將 active 設為 false，避免啟用時沒有權限
-                // 使用專用的熱鍵隊列來確保線程安全
-                hotKeyQueue.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    // 使用線程安全的方法
-                    self.setHotkeyActive(false)
-                    
-                    if let modifiers = modifiers {
-                        self.setHotKeyModifiers(modifiers)
-                    }
-                    
-                    if let character = character {
-                        self.setHotKeyCharacter(character)
-                    }
-                    
-                    self.saveSettings()
-                    
-                    // 發送熱鍵設定變更通知
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
-                        self.logger.debug("熱鍵設定已更新(禁用，因權限不足): 狀態=false, 修飾鍵=\(self.hotKeyModifiers), 主鍵=\(self.hotKeyCharacter)")
-                    }
-                }
-                
-                return
-            }
-        }
-        
-        // 使用專用的熱鍵隊列來確保線程安全
-        hotKeyQueue.async { [weak self] in
+    func updateHotkeySettings(isActive: Bool, modifiers: [String]?, character: String?) {
+        // 在主線程中執行所有熱鍵相關的操作
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            self.logger.info("正在更新熱鍵設定: active=\(isActive), modifiers=\(modifiers ?? []), character=\(character ?? "")")
             
-            // 獲取當前值以檢查是否有變更
             self.stateLock.lock()
-            let oldActive = self._isHotkeyActive
-            let oldModifiers = self._hotKeyModifiers
-            let oldCharacter = self._hotKeyCharacter
-            self.stateLock.unlock()
-            
-            // 更新狀態，使用線程安全的方法
-            self.setHotkeyActive(active)
-            
             if let modifiers = modifiers {
-                self.setHotKeyModifiers(modifiers)
+                self._hotKeyModifiers = modifiers
             }
             
             if let character = character {
-                self.setHotKeyCharacter(character)
+                self._hotKeyCharacter = character
             }
+            
+            self._isHotkeyActive = isActive
+            self.stateLock.unlock()
             
             // 保存設定
             self.saveSettings()
-            self.logger.info("✅ 熱鍵設定已保存")
             
-            // 檢查是否有變化
-            let hasChanges = (oldActive != active) || 
-                            (modifiers != nil && oldModifiers != self.hotKeyModifiers) || 
-                            (character != nil && oldCharacter != self.hotKeyCharacter)
-            
-            if hasChanges {
-                self.logger.info("📣 熱鍵設定有變更，發送通知")
-                // 發送熱鍵設定變更通知
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
-                
-                    // 強制重新注冊熱鍵，確保在主線程上操作
-                    if let appDelegate = NSApp.delegate as? AppDelegate, let hotKeyManager = appDelegate.hotKeyManager {
-                        hotKeyManager.setupHotKey()
-                    }
-                }
-            } else {
-                self.logger.info("ℹ️ 熱鍵設定無變化，不發送通知")
-            }
-            
-            self.logger.debug("熱鍵設定已更新: 狀態=\(active), 修飾鍵=\(self.hotKeyModifiers), 主鍵=\(self.hotKeyCharacter)")
+            // 通知熱鍵設定變更
+            NotificationCenter.default.post(name: .hotKeySettingsDidChange, object: nil)
+            self.logger.info("熱鍵設定更新完成並已發送通知")
         }
     }
     
@@ -424,23 +341,30 @@ class AppState: ObservableObject, @unchecked Sendable {
     /// 保存所有設定到 UserDefaults
     func saveSettings() {
         // 使用線程安全的方式獲取熱鍵設定
-        let isHotkeyActive, hotKeyModifiers, hotKeyCharacter: Any
+        var hotkeyActive: Bool
+        var modifiers: [String]
+        var character: String
         
         stateLock.lock()
-        isHotkeyActive = _isHotkeyActive
-        hotKeyModifiers = _hotKeyModifiers
-        hotKeyCharacter = _hotKeyCharacter
+        hotkeyActive = _isHotkeyActive
+        modifiers = _hotKeyModifiers
+        character = _hotKeyCharacter
         stateLock.unlock()
         
-        saveSetting(value: isVisualEffectsEnabled, forKey: "visualEffectsEnabled")
-        saveSetting(value: isParticleEffectsEnabled, forKey: "particleEffectsEnabled")
-        saveSetting(value: isAnimationsEnabled, forKey: "animationsEnabled")
-        saveSetting(value: isHighQualityEffectsEnabled, forKey: "highQualityEffects")
-        saveSetting(value: isHotkeyActive, forKey: "isHotkeyActive")
-        saveSetting(value: hotKeyModifiers, forKey: "hotKeyModifiers")
-        saveSetting(value: hotKeyCharacter, forKey: "hotKeyCharacter")
-        saveSetting(value: isClipboardMonitoringEnabled, forKey: "isClipboardMonitoringEnabled")
-        logger.info("已保存所有設定")
+        // 使用主線程保存設定，避免線程沖突
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.saveSetting(value: self.isVisualEffectsEnabled, forKey: "visualEffectsEnabled")
+            self.saveSetting(value: self.isParticleEffectsEnabled, forKey: "particleEffectsEnabled")
+            self.saveSetting(value: self.isAnimationsEnabled, forKey: "animationsEnabled")
+            self.saveSetting(value: self.isHighQualityEffectsEnabled, forKey: "highQualityEffects")
+            self.saveSetting(value: hotkeyActive, forKey: "isHotkeyActive")
+            self.saveSetting(value: modifiers, forKey: "hotKeyModifiers")
+            self.saveSetting(value: character, forKey: "hotKeyCharacter")
+            self.saveSetting(value: self.isClipboardMonitoringEnabled, forKey: "isClipboardMonitoringEnabled")
+            self.logger.info("已保存所有設定")
+        }
     }
     
     /// 重置所有設定

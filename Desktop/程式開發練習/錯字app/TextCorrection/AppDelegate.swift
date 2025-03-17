@@ -206,30 +206,65 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
     
-    /// 安全地初始化各個管理器，並處理可能的錯誤
-    private func initializeManagersSafely() throws {
-        // 用 autoreleasepool 確保內存管理正確
+    /// 確保在主線程上執行初始化
+    func initializeManagersSafely() {
+        if Thread.isMainThread {
+            logger.info("在主線程上初始化所有管理器")
+            initializeManagers()
+        } else {
+            logger.warning("嘗試在非主線程初始化管理器，切換到主線程")
+            DispatchQueue.main.async { [weak self] in
+                self?.initializeManagers()
+            }
+        }
+    }
+    
+    /// 初始化所有必要的管理器和服務
+    private func initializeManagers() {
+        logger.info("開始初始化所有管理器")
+        
         autoreleasepool {
-            // 初始化 OpenAI 服務
-            openAIService = OpenAIService()
-            
-            // 初始化文本窗口管理器
-            textWindowManager = TextWindowManager(appDelegate: self)
-            
-            // 初始化狀態列管理器
-            statusItemManager = StatusItemManager(appDelegate: self)
-            statusItemManager.setupStatusItem()
-            
-            // 初始化剪貼簿管理器
-            pasteboardManager = PasteboardManager(appDelegate: self)
-            pasteboardManager.startMonitoring()
-            
-            // 熱鍵管理器最後初始化，避免其他管理器還未就緒時就接收熱鍵事件
-            initializeHotKeyManager()
-            
-            logger.info("已設置主要和備用熱鍵註冊")
-            
-            logger.info("所有管理器已初始化")
+            do {
+                // 初始化服務和管理器
+                openAIService = try OpenAIService()
+                logger.info("OpenAI服務初始化完成")
+                
+                textWindowManager = TextWindowManager()
+                logger.info("文本窗口管理器初始化完成")
+                
+                statusItemManager = StatusItemManager()
+                logger.info("狀態欄管理器初始化完成")
+                
+                // 初始化熱鍵管理器
+                initializeHotKeyManager()
+                
+                // 初始化剪貼板監視器
+                clipboardMonitor = ClipboardMonitor()
+                logger.info("剪貼板監視器初始化完成")
+                
+                // 啟動剪貼板監視（如果啟用）
+                if AppState.shared.isClipboardMonitoringEnabled {
+                    logger.info("啟動剪貼板監視")
+                    clipboardMonitor?.startMonitoring()
+                }
+                
+                logger.info("所有管理器初始化完成")
+            } catch {
+                logger.error("初始化失敗: \(error.localizedDescription)")
+                
+                // 顯示錯誤對話框
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "初始化失敗"
+                    alert.informativeText = "應用程序無法正確啟動: \(error.localizedDescription)"
+                    alert.alertStyle = .critical
+                    alert.addButton(withTitle: "確定")
+                    alert.runModal()
+                    
+                    // 退出應用程序
+                    NSApp.terminate(nil)
+                }
+            }
         }
     }
 
@@ -1055,20 +1090,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cancellables.removeAll()
     }
 
-    func initializeHotKeyManager() {
-        // 確保在主線程上初始化熱鍵管理器
-        if Thread.isMainThread {
-            logger.debug("創建和設置熱鍵管理器")
-            hotKeyManager = HotKeyManager(appDelegate: self)
-            logger.debug("熱鍵管理器初始化完成")
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.logger.debug("在主線程上創建和設置熱鍵管理器")
-                self.hotKeyManager = HotKeyManager(appDelegate: self)
-                self.logger.debug("熱鍵管理器初始化完成")
-            }
-        }
+    private func initializeHotKeyManager() {
+        logger.info("初始化熱鍵管理器")
+        hotKeyManager = HotKeyManager()
+        logger.info("熱鍵管理器初始化完成")
     }
 }
 

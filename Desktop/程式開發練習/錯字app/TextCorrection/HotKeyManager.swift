@@ -5,6 +5,7 @@ import Foundation
 import Carbon
 import Combine
 import SwiftUI
+import Magnet
 
 // 完整的類實現，而不是擴展
 class HotKeyManager: @unchecked Sendable {
@@ -13,6 +14,8 @@ class HotKeyManager: @unchecked Sendable {
     var hotKey: HotKey?
     var globalMonitor: Any?
     var carbonEventHandler: EventHandlerRef?
+    private var carbonHotKeyID: UInt32?
+    private var carbonHotKeyRef: EventHotKeyRef?
     
     // 創建日誌對象
     private var logger: Logger {
@@ -129,182 +132,226 @@ class HotKeyManager: @unchecked Sendable {
     }
     
     func setupHotKey() {
-        // 先確保沒有現有的熱鍵
-        disableHotKey()
+        logger.info("開始設置熱鍵 (無參數版本)")
         
-        // 使用線程安全的方式獲取熱鍵設定
-        // 在主線程上捕獲當前值，以避免在處理過程中變化
-        let isActive = AppState.shared.isHotkeyActive
-        let modifiers = AppState.shared.hotKeyModifiers
-        let keyCharacter = AppState.shared.hotKeyCharacter
+        let appState = AppState.shared
+        let isActive = appState.isHotkeyActive
+        let modifiers = appState.hotKeyModifiers
+        let keyCharacter = appState.hotKeyCharacter
         
-        logger.info("===== 熱鍵設置詳情 =====")
-        logger.info("是否啟用熱鍵: \(isActive)")
-        logger.info("修飾鍵: \(modifiers.joined(separator: ", "))")
-        logger.info("主鍵: \(keyCharacter)")
-        logger.info("=========================")
+        logger.info("從AppState獲取熱鍵設定: active=\(isActive), modifiers=\(modifiers), key=\(keyCharacter)")
+        
+        setupHotKey(isActive: isActive, modifiers: modifiers, keyCharacter: keyCharacter)
+    }
+    
+    /// 設置熱鍵功能
+    /// - Parameters:
+    ///   - isActive: 是否啟用熱鍵
+    ///   - modifiers: 修飾鍵列表
+    ///   - keyCharacter: 主鍵字符
+    func setupHotKey(isActive: Bool, modifiers: [String], keyCharacter: String) {
+        // 先移除現有的熱鍵
+        unregisterHotKey()
         
         if !isActive {
-            logger.info("熱鍵功能已禁用")
+            logger.info("熱鍵功能已停用")
             return
         }
         
-        // 添加調試日誌
-        logger.info("嘗試設置熱鍵: 修飾鍵=\(modifiers), 主鍵=\(keyCharacter)")
+        logger.info("設置熱鍵: modifiers=\(modifiers), key=\(keyCharacter)")
         
-        // 檢查修飾鍵是否為空
-        if modifiers.isEmpty {
-            logger.warning("修飾鍵為空，無法設置熱鍵")
-            // 使用默認修飾鍵，確保在主線程上更新
-            DispatchQueue.main.async {
-                AppState.shared.updateHotkeySettings(active: isActive, modifiers: ["shift", "control"])
-            }
-            return
-        }
+        // 檢查輔助功能權限
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
-        // 檢查主鍵是否為空
-        if keyCharacter.isEmpty {
-            logger.warning("主鍵為空，無法設置熱鍵")
-            // 確保在主線程上更新
+        if !accessEnabled {
+            logger.warning("嘗試啟用熱鍵但缺少輔助功能權限")
             DispatchQueue.main.async {
-                AppState.shared.updateHotkeySettings(active: isActive, character: "space")
+                self.promptForAccessibilityPermissions()
             }
             return
         }
         
         // 轉換修飾鍵
-        var modifierFlags: NSEvent.ModifierFlags = []
+        var keyModifiers: NSEvent.ModifierFlags = []
         for modifier in modifiers {
             switch modifier.lowercased() {
             case "command":
-                modifierFlags.insert(.command)
+                keyModifiers.insert(.command)
                 logger.debug("添加修飾鍵: command")
-            case "option":
-                modifierFlags.insert(.option)
-                logger.debug("添加修飾鍵: option")
-            case "control":
-                modifierFlags.insert(.control)
-                logger.debug("添加修飾鍵: control")
             case "shift":
-                modifierFlags.insert(.shift)
+                keyModifiers.insert(.shift)
                 logger.debug("添加修飾鍵: shift")
+            case "option", "alt":
+                keyModifiers.insert(.option)
+                logger.debug("添加修飾鍵: option")
+            case "control", "ctrl":
+                keyModifiers.insert(.control)
+                logger.debug("添加修飾鍵: control")
             default:
                 logger.warning("未知修飾鍵: \(modifier)")
-                break
             }
         }
         
-        // 檢查修飾鍵標誌是否為空
-        if modifierFlags.isEmpty {
-            logger.warning("修飾鍵轉換後為空，使用默認設置")
-            modifierFlags = [.control, .shift]
+        // 轉換主鍵
+        var keyString = keyCharacter
+        if keyCharacter.lowercased() == "space" {
+            keyString = " "
+            logger.debug("主鍵轉換: 'space' -> ' '")
         }
         
-        logger.info("轉換後的修飾鍵標誌: \(modifierFlags.rawValue)")
+        // 設置熱鍵
+        logger.info("註冊熱鍵: \(keyModifiers.rawValue) + \(keyString)")
         
-        // 轉換按鍵
-        var key: Key?
-        switch keyCharacter.lowercased() {
-        case "space":
-            key = .space
-            logger.debug("按鍵設置為: space")
-        case "return":
-            key = .return
-            logger.debug("按鍵設置為: return")
-        case "delete":
-            key = .delete
-            logger.debug("按鍵設置為: delete")
-        case "up":
-            key = .upArrow
-            logger.debug("按鍵設置為: upArrow")
-        case "down":
-            key = .downArrow
-            logger.debug("按鍵設置為: downArrow")
-        default:
-            // 單字符按鍵
-            if let keyCode = keyCharacter.first?.asciiValue {
-                logger.debug("嘗試創建按鍵，ASCII值: \(keyCode)")
-                if let unwrappedKey = Key(carbonKeyCode: UInt32(keyCode - 97 + 0x00)) {
-                    key = unwrappedKey
-                    logger.debug("成功創建按鍵: \(unwrappedKey.description)")
-                } else {
-                    logger.error("無法創建熱鍵: \(keyCharacter)，ASCII值: \(keyCode)")
-                    // 嘗試使用默認按鍵
-                    key = .space
-                    logger.info("使用默認按鍵: space")
-                }
-            } else {
-                logger.error("無法識別熱鍵字符: \(keyCharacter)")
-                // 嘗試使用默認按鍵
-                key = .space
-                logger.info("使用默認按鍵: space")
-            }
-        }
-        
-        // 建立熱鍵
-        if let unwrappedKey = key {
-            logger.info("嘗試使用鍵:\(unwrappedKey.description) 和修飾鍵:\(modifierFlags) 創建熱鍵")
-            hotKey = HotKey(key: unwrappedKey, modifiers: modifierFlags)
+        if let keyEquivalent = KeyEquivalent(keyString) {
+            hotKey = HotKey(keyEquivalent: keyEquivalent, modifiers: keyModifiers, handler: { [weak self] _ in
+                self?.handleHotKeyPressed()
+            })
             
-            // 設置熱鍵觸發的動作
-            hotKey?.keyDownHandler = { [weak self] in
-                self?.hotKeyTriggered()
-            }
-            
-            // 檢查熱鍵是否註冊成功
             if hotKey != nil {
-                logger.info("✅ 熱鍵註冊成功: \(unwrappedKey.description) 配合修飾鍵: \(modifierFlags)")
+                logger.info("熱鍵註冊成功")
             } else {
-                logger.error("❌ 熱鍵註冊失敗 - 按鍵: \(unwrappedKey.description), 修飾鍵: \(modifierFlags)")
+                logger.error("熱鍵註冊失敗")
                 
-                // 檢查輔助功能權限並通知用戶
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    // 嘗試獲取 AppDelegate 參考
-                    if let appDelegate = self.appDelegate {
-                        self.logger.info("嘗試檢查輔助功能權限")
-                        appDelegate.checkAccessibilityPermissions()
-                    } else if let appDelegate = AppKitBridge.shared.appDelegate {
-                        self.logger.info("通過 AppKitBridge 嘗試檢查輔助功能權限")
-                        appDelegate.checkAccessibilityPermissions()
-                    } else {
-                        self.logger.error("無法獲取 AppDelegate 參考，無法檢查輔助功能權限")
-                        
-                        // 如果無法獲取 AppDelegate，直接顯示提示給用戶
-                        let alert = NSAlert()
-                        alert.messageText = "熱鍵註冊失敗"
-                        alert.informativeText = "無法註冊熱鍵，可能是因為缺少輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。"
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "打開系統設定")
-                        alert.addButton(withTitle: "取消")
-                        
-                        let response = alert.runModal()
-                        if response == .alertFirstButtonReturn {
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                        }
-                    }
-                    
-                    // 確保熱鍵設定被暫時禁用，避免用戶困惑
-                    DispatchQueue.main.async {
-                        AppState.shared.updateHotkeySettings(active: false)
-                    }
-                }
+                // 嘗試其他方法註冊
+                registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
             }
         } else {
-            logger.error("❌ 無法建立熱鍵，key為nil")
+            logger.error("無法創建KeyEquivalent，熱鍵註冊失敗")
+            
+            // 嘗試其他方法註冊
+            registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
+        }
+    }
+    
+    /// 注銷所有熱鍵
+    private func unregisterHotKey() {
+        logger.info("注銷現有熱鍵")
+        
+        // 注銷Magnet熱鍵
+        if hotKey != nil {
+            hotKey = nil
+            logger.debug("Magnet熱鍵已注銷")
         }
         
-        // 不論主熱鍵是否註冊成功，都嘗試註冊備用熱鍵，增加成功率
-        logger.info("嘗試註冊備用熱鍵機制...")
-        registerCarbonHotKey()  // 使用 Carbon API 註冊備用熱鍵
-        registerGlobalShortcut()  // 使用全局事件監聽器註冊備用熱鍵
-        logger.info("✅ 已添加備用熱鍵註冊機制")
+        // 注銷Carbon熱鍵
+        if let carbonHotKeyRef = carbonHotKeyRef {
+            UnregisterEventHotKey(carbonHotKeyRef)
+            self.carbonHotKeyRef = nil
+            self.carbonHotKeyID = nil
+            logger.debug("Carbon熱鍵已注銷")
+        }
+    }
+    
+    /// 使用Carbon API註冊熱鍵（備用方案）
+    private func registerCarbonHotKey(modifiers: NSEvent.ModifierFlags, key: String) {
+        logger.info("嘗試使用Carbon API註冊熱鍵")
         
-        // 測試權限檢查
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
-        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
-        logger.info("輔助功能權限狀態: \(accessEnabled ? "已授權" : "未授權")")
+        // 轉換為Carbon修飾鍵
+        var carbonModifiers: UInt32 = 0
+        if modifiers.contains(.command) {
+            carbonModifiers |= UInt32(cmdKey)
+        }
+        if modifiers.contains(.shift) {
+            carbonModifiers |= UInt32(shiftKey)
+        }
+        if modifiers.contains(.option) {
+            carbonModifiers |= UInt32(optionKey)
+        }
+        if modifiers.contains(.control) {
+            carbonModifiers |= UInt32(controlKey)
+        }
+        
+        // 獲取按鍵代碼
+        guard let firstChar = key.unicodeScalars.first else {
+            logger.error("無法獲取按鍵代碼，Carbon熱鍵註冊失敗")
+            return
+        }
+        
+        let keyCode: UInt32
+        if key == " " {
+            keyCode = UInt32(kVK_Space)
+        } else {
+            keyCode = UInt32(firstChar.value)
+        }
+        
+        // 生成唯一ID
+        let hotKeyID = UInt32(arc4random_uniform(1000))
+        carbonHotKeyID = hotKeyID
+        
+        // 構建事件類型
+        var eventType = EventTypeSpec()
+        eventType.eventClass = OSType(kEventClassKeyboard)
+        eventType.eventKind = OSType(kEventHotKeyPressed)
+        
+        // 註冊事件處理器
+        var handlerRef: EventHandlerRef?
+        let handlerCallback: EventHandlerUPP = { (nextHandler, eventRef, userData) -> OSStatus in
+            if let manager = unsafeBitCast(userData, to: HotKeyManager.self) as HotKeyManager? {
+                manager.handleHotKeyPressed()
+            }
+            return noErr
+        }
+        
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            handlerCallback,
+            1,
+            &eventType,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &handlerRef
+        )
+        
+        if status == noErr {
+            logger.debug("Carbon事件處理器註冊成功")
+            
+            // 註冊熱鍵
+            var hotKeyRef: EventHotKeyRef?
+            let regStatus = RegisterEventHotKey(
+                keyCode,
+                carbonModifiers,
+                EventHotKeyID(signature: OSType(keyCode), id: hotKeyID),
+                GetApplicationEventTarget(),
+                0,
+                &hotKeyRef
+            )
+            
+            if regStatus == noErr && hotKeyRef != nil {
+                carbonHotKeyRef = hotKeyRef
+                logger.info("Carbon熱鍵註冊成功")
+            } else {
+                logger.error("Carbon熱鍵註冊失敗，錯誤碼: \(regStatus)")
+            }
+        } else {
+            logger.error("Carbon事件處理器註冊失敗，錯誤碼: \(status)")
+        }
+    }
+    
+    /// 處理熱鍵觸發事件
+    private func handleHotKeyPressed() {
+        logger.info("熱鍵已觸發")
+        
+        DispatchQueue.main.async {
+            // 發送通知，通知應用執行文本處理操作
+            NotificationCenter.default.post(name: NSNotification.Name("ProcessTextFromHotKey"), object: nil)
+            NSSound.beep() // 播放提示音
+        }
+    }
+    
+    /// 提示用戶授予輔助功能權限
+    private func promptForAccessibilityPermissions() {
+        logger.info("顯示輔助功能權限提示")
+        
+        let alert = NSAlert()
+        alert.messageText = "需要輔助功能權限"
+        alert.informativeText = "熱鍵功能需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。授權後請重啟應用。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "打開系統設定")
+        alert.addButton(withTitle: "取消")
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        }
     }
     
     // 移除全局監聽器
@@ -340,114 +387,6 @@ class HotKeyManager: @unchecked Sendable {
         } else {
             logger.error("主熱鍵註冊失敗")
         }
-    }
-    
-    // 使用 Carbon API 註冊熱鍵
-    func registerCarbonHotKey() {
-        logger.info("🔄 嘗試使用 Carbon API 註冊熱鍵...")
-        // 確保先卸載任何現有的碳熱鍵
-        unregisterCarbonHotKey()
-        
-        // 使用 Carbon API 註冊另一個快捷鍵作為備用（Cmd+Option+T）
-        var eventType = EventTypeSpec()
-        eventType.eventClass = OSType(kEventClassKeyboard)
-        eventType.eventKind = OSType(kEventHotKeyPressed)
-        
-        // 安裝碳事件處理程序 - 使用弱引用避免循環引用
-        // 在此使用unretained而不是retained來避免記憶體問題
-        let selfPointer = Unmanaged.passUnretained(self).toOpaque()
-        
-        let status = InstallEventHandler(GetApplicationEventTarget(), { (_, event, userData) -> OSStatus in
-            guard let userData = userData else {
-                return noErr
-            }
-            
-            // 使用 takeUnretainedValue 匹配 passUnretained
-            let this = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-            this.logger.info("檢測到 Carbon 熱鍵按下")
-            
-            // 確保在主線程上調用 processSelectedText
-            Task { @MainActor in
-                this.processSelectedText()
-            }
-            
-            return noErr
-        }, 1, &eventType, selfPointer, &carbonEventHandler)
-        
-        // 註冊熱鍵
-        if status == noErr {
-            // Command + Option + T
-            let keyCode: UInt32 = 17 // T key
-            let modifiers: UInt32 = UInt32(cmdKey | optionKey) // Command + Option
-            
-            var hotKeyID = EventHotKeyID()
-            hotKeyID.signature = OSType(fourCharCode(string: "TXCR"))
-            hotKeyID.id = 1
-            
-            var hotKeyRef: EventHotKeyRef?
-            
-            let registerStatus = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
-            
-            if registerStatus == noErr {
-                logger.info("Carbon 熱鍵註冊成功: ⌘+⌥+T")
-            } else {
-                logger.error("Carbon 熱鍵註冊失敗: \(registerStatus)")
-            }
-        } else {
-            logger.error("安裝 Carbon 事件處理程序失敗: \(status)")
-            // 使用passUnretained時不需要釋放
-        }
-    }
-    
-    // 卸載 Carbon 熱鍵
-    private func unregisterCarbonHotKey() {
-        if let handler = carbonEventHandler {
-            // 先將 handler 設為 nil 再調用 RemoveEventHandler，防止重複釋放
-            let tempHandler = handler
-            carbonEventHandler = nil
-            RemoveEventHandler(tempHandler)
-        }
-    }
-    
-    // 將四個字符轉換為 OSType
-    private func fourCharCode(string: String) -> UInt32 {
-        var result: UInt32 = 0
-        let chars = Array(string.utf8)
-        for i in 0..<min(chars.count, 4) {
-            // 修正位運算，避免溢出和非對齊問題
-            result = (result << 8) | UInt32(chars[i])
-        }
-        return result
-    }
-    
-    // 註冊額外的全局快捷鍵
-    func registerGlobalShortcut() {
-        logger.info("🔄 嘗試註冊全局快捷鍵監控...")
-        // 移除先前的監聽器
-        removeGlobalMonitor()
-        
-        // 使用系統的事件監聽器註冊另一個熱鍵
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self else { return }
-            
-            // Command + T
-            let isCommandT = event.modifierFlags.contains(.command) && event.keyCode == 17
-            
-            // Control + Command + Space
-            let isControlCmdSpace = event.modifierFlags.contains(.command) && event.modifierFlags.contains(.control) && event.keyCode == 49
-            
-            if isCommandT || isControlCmdSpace {
-                let modString = isCommandT ? "Command+T" : "Control+Command+Space"
-                self.logger.info("檢測到全局快捷鍵 \(modString)")
-                
-                // 確保在主線程上調用 processSelectedText
-                Task { @MainActor in
-                    self.processSelectedText()
-                }
-            }
-        }
-        
-        logger.info("已註冊額外全局快捷鍵")
     }
     
     // 註冊熱鍵
