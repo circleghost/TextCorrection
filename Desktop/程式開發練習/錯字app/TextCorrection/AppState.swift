@@ -212,14 +212,14 @@ class AppState: ObservableObject, @unchecked Sendable {
     
     /// 更新熱鍵設定，包含狀態、修飾鍵和主鍵
     /// - Parameters:
-    ///   - isActive: 是否啟用熱鍵
+    ///   - active: 是否啟用熱鍵
     ///   - modifiers: 修飾鍵陣列
     ///   - character: 主鍵字符
-    func updateHotkeySettings(isActive: Bool, modifiers: [String]?, character: String?) {
+    func updateHotkeySettings(active: Bool, modifiers: [String]? = nil, character: String? = nil) {
         // 在主線程中執行所有熱鍵相關的操作
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            self.logger.info("正在更新熱鍵設定: active=\(isActive), modifiers=\(modifiers ?? []), character=\(character ?? "")")
+            self.logger.info("正在更新熱鍵設定: active=\(active), modifiers=\(modifiers?.description ?? "未變更"), character=\(character ?? "未變更")")
             
             self.stateLock.lock()
             if let modifiers = modifiers {
@@ -230,14 +230,14 @@ class AppState: ObservableObject, @unchecked Sendable {
                 self._hotKeyCharacter = character
             }
             
-            self._isHotkeyActive = isActive
+            self._isHotkeyActive = active
             self.stateLock.unlock()
             
             // 保存設定
             self.saveSettings()
             
             // 通知熱鍵設定變更
-            NotificationCenter.default.post(name: .hotKeySettingsDidChange, object: nil)
+            NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
             self.logger.info("熱鍵設定更新完成並已發送通知")
         }
     }
@@ -364,6 +364,9 @@ class AppState: ObservableObject, @unchecked Sendable {
             self.saveSetting(value: character, forKey: "hotKeyCharacter")
             self.saveSetting(value: self.isClipboardMonitoringEnabled, forKey: "isClipboardMonitoringEnabled")
             self.logger.info("已保存所有設定")
+            
+            // 確保UI更新也在主線程上進行
+            self.objectWillChange.send()
         }
     }
     
