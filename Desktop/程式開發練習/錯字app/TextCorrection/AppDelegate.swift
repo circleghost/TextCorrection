@@ -228,7 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             logger.info("狀態欄管理器初始化完成")
             
             // 初始化熱鍵管理器
-            initializeHotKeyManager()
+            initializeHotKeyManager(appDelegate: self)
             
             // 初始化剪貼板監視器
             pasteboardManager = PasteboardManager()
@@ -1066,8 +1066,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cancellables.removeAll()
     }
 
-    private func initializeHotKeyManager() {
-        hotKeyManager = HotKeyManager(appDelegate: self)
+    private func initializeHotKeyManager(appDelegate: AppDelegate) {
+        hotKeyManager = HotKeyManager(appDelegate: appDelegate)
         logger.info("熱鍵管理器初始化完成")
     }
 }
