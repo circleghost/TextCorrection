@@ -5,7 +5,7 @@ import Foundation
 import Carbon
 import Combine
 import SwiftUI
-import Magnet
+
 
 // 完整的類實現，而不是擴展
 class HotKeyManager: @unchecked Sendable {
