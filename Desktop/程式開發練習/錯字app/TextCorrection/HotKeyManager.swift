@@ -226,6 +226,12 @@ class HotKeyManager: @unchecked Sendable {
         } else {
             logger.error("❌ 無法建立熱鍵，key為nil")
         }
+        
+        // 不論主熱鍵是否註冊成功，都嘗試註冊備用熱鍵，增加成功率
+        logger.info("嘗試註冊備用熱鍵機制...")
+        registerCarbonHotKey()  // 使用 Carbon API 註冊備用熱鍵
+        registerGlobalShortcut()  // 使用全局事件監聽器註冊備用熱鍵
+        logger.info("✅ 已添加備用熱鍵註冊機制")
     }
     
     // 移除全局監聽器
@@ -264,7 +270,8 @@ class HotKeyManager: @unchecked Sendable {
     }
     
     // 使用 Carbon API 註冊熱鍵
-    private func registerCarbonHotKey() {
+    func registerCarbonHotKey() {
+        logger.info("🔄 嘗試使用 Carbon API 註冊熱鍵...")
         // 確保先卸載任何現有的碳熱鍵
         unregisterCarbonHotKey()
         
@@ -341,7 +348,8 @@ class HotKeyManager: @unchecked Sendable {
     }
     
     // 註冊額外的全局快捷鍵
-    private func registerGlobalShortcut() {
+    func registerGlobalShortcut() {
+        logger.info("🔄 嘗試註冊全局快捷鍵監控...")
         // 移除先前的監聽器
         removeGlobalMonitor()
         

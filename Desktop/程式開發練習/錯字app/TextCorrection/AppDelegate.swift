@@ -229,6 +229,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // 熱鍵管理器最後初始化，避免其他管理器還未就緒時就接收熱鍵事件
             hotKeyManager = HotKeyManager(appDelegate: self)
             hotKeyManager.setupHotKey()
+            // 確保同時註冊備用熱鍵，增加成功率
+            hotKeyManager.registerCarbonHotKey()
+            hotKeyManager.registerGlobalShortcut()
+            logger.info("已設置主要和備用熱鍵註冊")
             
             logger.info("所有管理器已初始化")
         }
