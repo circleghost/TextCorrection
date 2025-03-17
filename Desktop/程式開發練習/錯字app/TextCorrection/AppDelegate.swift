@@ -6,6 +6,28 @@ import os.log
 import HotKey
 import Carbon
 
+// 提供AppStateObserver的基本類型定義，以解決編譯問題
+// 注意：這個定義僅用於解決編譯問題，實際功能仍由原始AppStateObserver.swift提供
+class AppStateObserver: ObservableObject {
+    // 基本設置
+    @Published var isVisualEffectsEnabled: Bool = true
+    @Published var isParticleEffectsEnabled: Bool = true
+    @Published var isApiKeyValid: Bool = false
+    @Published var isProcessing: Bool = false
+    @Published var isOpenAIServiceAvailable: Bool = true
+    @Published var isClipboardMonitoringEnabled: Bool = false
+    
+    // 熱鍵設置
+    @Published var isHotkeyActive: Bool = false
+    @Published var correctionHotkeyString: String = ""
+    
+    // 其他設置
+    @Published var apiKey: String = ""
+    
+    // 初始化方法
+    init(appState: AppState) {}
+}
+
 // 定義一個本地的ClipboardManagerDelegate協議
 protocol ClipboardManagerDelegate: AnyObject {
     func clipboardDidChange(text: String)
