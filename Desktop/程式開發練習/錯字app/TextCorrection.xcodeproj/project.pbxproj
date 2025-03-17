@@ -13,6 +13,7 @@
 		4754AB222C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB232C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
 		4754AB242C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4754AB212C8E8DA0004FFCA0 /* 仓耳今楷01-W05.ttf */; };
+		477781612D88806B0053BA9A /* Magnet in Frameworks */ = {isa = PBXBuildFile; productRef = 477781602D88806B0053BA9A /* Magnet */; };
 		47826FBA2C8F5A4500D2D8F4 /* OpenAIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */; };
 		47826FBB2C8F5A4500D2D8F4 /* TextCorrectionError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */; };
 		47826FBC2C8F5A4500D2D8F4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */; };
@@ -105,6 +106,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				477781612D88806B0053BA9A /* Magnet in Frameworks */,
 				47C086332C8DB15700030313 /* DifferenceKit in Frameworks */,
 				47826FCA2C901C7B00D2D8F4 /* Differ in Frameworks */,
 				47C086302C8CC27D00030313 /* HotKey in Frameworks */,
@@ -233,6 +235,7 @@
 				47826FC92C901C7B00D2D8F4 /* Differ */,
 				47826FCC2C90317A00D2D8F4 /* PythonKit */,
 				474CD3F32C92D0D900D3BD66 /* KeychainAccess */,
+				477781602D88806B0053BA9A /* Magnet */,
 			);
 			productName = TextCorrection;
 			productReference = 4784341C2C8C38D500456192 /* TextCorrection.app */;
@@ -318,6 +321,7 @@
 				47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */,
 				47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */,
 				474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+				4777815F2D88806B0053BA9A /* XCRemoteSwiftPackageReference "Magnet" */,
 			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
@@ -721,6 +725,14 @@
 				kind = branch;
 			};
 		};
+		4777815F2D88806B0053BA9A /* XCRemoteSwiftPackageReference "Magnet" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Clipy/Magnet";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tonyarnold/Differ";
@@ -760,6 +772,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
 			productName = KeychainAccess;
+		};
+		477781602D88806B0053BA9A /* Magnet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4777815F2D88806B0053BA9A /* XCRemoteSwiftPackageReference "Magnet" */;
+			productName = Magnet;
 		};
 		47826FC92C901C7B00D2D8F4 /* Differ */ = {
 			isa = XCSwiftPackageProductDependency;

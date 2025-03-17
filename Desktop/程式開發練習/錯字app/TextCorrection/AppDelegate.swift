@@ -206,65 +206,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
     
-    /// 確保在主線程上執行初始化
-    func initializeManagersSafely() {
-        if Thread.isMainThread {
-            logger.info("在主線程上初始化所有管理器")
-            initializeManagers()
-        } else {
-            logger.warning("嘗試在非主線程初始化管理器，切換到主線程")
-            DispatchQueue.main.async { [weak self] in
-                self?.initializeManagers()
-            }
-        }
-    }
-    
-    /// 初始化所有必要的管理器和服務
-    private func initializeManagers() {
+    /// 安全地初始化所有管理器 - 捕獲任何可能的錯誤
+    private func initializeManagersSafely() throws {
         logger.info("開始初始化所有管理器")
         
-        autoreleasepool {
+        // 使用 autoreleasepool 確保內存及時釋放
+        try autoreleasepool {
+            // 初始化服務和管理器
             do {
-                // 初始化服務和管理器
                 openAIService = try OpenAIService()
                 logger.info("OpenAI服務初始化完成")
-                
-                textWindowManager = TextWindowManager()
-                logger.info("文本窗口管理器初始化完成")
-                
-                statusItemManager = StatusItemManager()
-                logger.info("狀態欄管理器初始化完成")
-                
-                // 初始化熱鍵管理器
-                initializeHotKeyManager()
-                
-                // 初始化剪貼板監視器
-                clipboardMonitor = ClipboardMonitor()
-                logger.info("剪貼板監視器初始化完成")
-                
-                // 啟動剪貼板監視（如果啟用）
-                if AppState.shared.isClipboardMonitoringEnabled {
-                    logger.info("啟動剪貼板監視")
-                    clipboardMonitor?.startMonitoring()
-                }
-                
-                logger.info("所有管理器初始化完成")
             } catch {
-                logger.error("初始化失敗: \(error.localizedDescription)")
-                
-                // 顯示錯誤對話框
-                DispatchQueue.main.async {
-                    let alert = NSAlert()
-                    alert.messageText = "初始化失敗"
-                    alert.informativeText = "應用程序無法正確啟動: \(error.localizedDescription)"
-                    alert.alertStyle = .critical
-                    alert.addButton(withTitle: "確定")
-                    alert.runModal()
-                    
-                    // 退出應用程序
-                    NSApp.terminate(nil)
-                }
+                logger.error("初始化 OpenAI 服務失敗: \(error.localizedDescription)")
+                throw error
             }
+            
+            textWindowManager = TextWindowManager()
+            logger.info("文本窗口管理器初始化完成")
+            
+            statusItemManager = StatusItemManager()
+            logger.info("狀態欄管理器初始化完成")
+            
+            // 初始化熱鍵管理器
+            initializeHotKeyManager()
+            
+            // 初始化剪貼板監視器
+            pasteboardManager = PasteboardManager()
+            logger.info("剪貼板監視器初始化完成")
+            
+            // 啟動剪貼板監視（如果啟用）
+            if AppState.shared.isClipboardMonitoringEnabled {
+                logger.info("啟動剪貼板監視")
+                pasteboardManager.startMonitoring()
+            }
+            
+            logger.info("所有管理器初始化完成")
         }
     }
 
@@ -1091,8 +1067,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func initializeHotKeyManager() {
-        logger.info("初始化熱鍵管理器")
-        hotKeyManager = HotKeyManager()
+        hotKeyManager = HotKeyManager(appDelegate: self)
         logger.info("熱鍵管理器初始化完成")
     }
 }
