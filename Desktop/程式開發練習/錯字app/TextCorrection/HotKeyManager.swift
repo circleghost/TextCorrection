@@ -6,7 +6,6 @@ import Carbon
 import Combine
 import SwiftUI
 
-
 // 完整的類實現，而不是擴展
 class HotKeyManager: @unchecked Sendable {
     weak var appDelegate: AppDelegate?
