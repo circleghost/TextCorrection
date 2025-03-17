@@ -1,218 +1,213 @@
 import Foundation
 import os.log
 
-/// OpenAI服務：負責處理OpenAI API的調用
-class OpenAIService {
-    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "OpenAIService")
-    private let openAIEndpoint = "https://api.openai.com/v1/chat/completions"
-    
-    /// 驗證API金鑰
-    /// - Parameters:
-    ///   - apiKey: OpenAI API金鑰
-    ///   - completion: 完成後的回調，包含金鑰是否有效
-    func validateAPIKey(_ apiKey: String, completion: @escaping (Bool) -> Void) {
-        guard !apiKey.isEmpty else {
-            logger.warning("API金鑰為空，無法驗證")
-            completion(false)
-            return
-        }
-        
-        var request = URLRequest(url: URL(string: openAIEndpoint)!)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 發送最小請求以驗證金鑰
-        let body: [String: Any] = [
-            "model": "gpt-3.5-turbo",
-            "messages": [
-                ["role": "system", "content": "Hello"],
-                ["role": "user", "content": "Test"]
-            ],
-            "max_tokens": 5
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        } catch {
-            logger.error("JSON序列化失敗: \(error.localizedDescription)")
-            completion(false)
-            return
-        }
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                self.logger.error("API請求錯誤: \(error.localizedDescription)")
-                completion(false)
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                self.logger.error("無效的HTTP響應")
-                completion(false)
-                return
-            }
-            
-            // 檢查HTTP狀態碼
-            let isValid = httpResponse.statusCode == 200
-            self.logger.debug("API金鑰驗證結果: \(isValid), 狀態碼: \(httpResponse.statusCode)")
-            completion(isValid)
-        }.resume()
-    }
-    
-    /// 使用OpenAI處理文本
-    /// - Parameters:
-    ///   - text: 要處理的原始文本
-    ///   - systemPrompt: 系統提示詞
-    ///   - apiKey: OpenAI API金鑰
-    ///   - completion: 完成後的回調，包含處理結果
-    func processTextWithPrompt(text: String, systemPrompt: String, apiKey: String, completion: @escaping (Result<String, Error>) -> Void) {
-        guard !text.isEmpty else {
-            completion(.failure(OpenAIError.emptyText))
-            return
-        }
-        
-        guard !apiKey.isEmpty else {
-            completion(.failure(OpenAIError.invalidAPIKey))
-            return
-        }
-        
-        var request = URLRequest(url: URL(string: openAIEndpoint)!)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // 構建請求體
-        let body: [String: Any] = [
-            "model": "gpt-4-0125-preview",
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": text]
-            ],
-            "temperature": 0.3,
-            "max_tokens": 4000
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        } catch {
-            self.logger.error("JSON序列化失敗: \(error.localizedDescription)")
-            completion(.failure(error))
-            return
-        }
-        
-        let startTime = Date()
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self else { return }
-            
-            // 計算API響應時間
-            let responseTime = Date().timeIntervalSince(startTime)
-            self.logger.debug("OpenAI API響應時間: \(responseTime)秒")
-            
-            if let error = error {
-                self.logger.error("API請求錯誤: \(error.localizedDescription)")
-                completion(.failure(error))
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                self.logger.error("無效的HTTP響應")
-                completion(.failure(OpenAIError.invalidResponse))
-                return
-            }
-            
-            if httpResponse.statusCode != 200 {
-                self.logger.error("API錯誤: HTTP狀態碼 \(httpResponse.statusCode)")
-                
-                // 嘗試從錯誤響應中提取更詳細的錯誤信息
-                if let data = data, let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let errorDetail = errorJson["error"] as? [String: Any],
-                   let errorMessage = errorDetail["message"] as? String {
-                    completion(.failure(OpenAIError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)))
-                } else {
-                    completion(.failure(OpenAIError.apiError(statusCode: httpResponse.statusCode, message: "未知錯誤")))
-                }
-                return
-            }
-            
-            guard let data = data else {
-                self.logger.error("無數據返回")
-                completion(.failure(OpenAIError.noData))
-                return
-            }
-            
-            do {
-                // 解析API響應
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let choices = json["choices"] as? [[String: Any]],
-                   let firstChoice = choices.first,
-                   let message = firstChoice["message"] as? [String: Any],
-                   let content = message["content"] as? String {
-                    
-                    // 提取反引號之間的內容
-                    let correctedText = self.extractTextBetweenTripleBackticks(content) ?? content
-                    
-                    self.logger.info("文本處理成功，校正後字符數: \(correctedText.count)")
-                    completion(.success(correctedText))
-                } else {
-                    self.logger.error("無法解析API響應")
-                    completion(.failure(OpenAIError.parsingError))
-                }
-            } catch {
-                self.logger.error("JSON解析錯誤: \(error.localizedDescription)")
-                completion(.failure(error))
-            }
-        }.resume()
-    }
-    
-    /// 從文本中提取三個反引號之間的內容
-    /// - Parameter text: 包含反引號部分的文本
-    /// - Returns: 提取的文本，如果沒有找到返回nil
-    private func extractTextBetweenTripleBackticks(_ text: String) -> String? {
-        let pattern = "```([\\s\\S]*?)```"
-        
-        do {
-            let regex = try NSRegularExpression(pattern: pattern)
-            let nsString = text as NSString
-            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
-            
-            if let match = matches.first {
-                // 獲取第一個捕獲組（括號內的內容）
-                let range = match.range(at: 1)
-                return nsString.substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        } catch {
-            logger.error("正則表達式錯誤: \(error.localizedDescription)")
-        }
-        
-        return nil
-    }
+enum OpenAIError: Error {
+    case invalidAPIKey
+    case networkError(Error)
+    case invalidResponse
+    case serverError(String)
+    case clientError(String)
+    case modelUnavailable
+    case unexpectedError(String)
+    case timeout
 }
 
-/// OpenAI相關錯誤
-enum OpenAIError: Error {
-    case emptyText
-    case invalidAPIKey
-    case invalidResponse
-    case noData
-    case parsingError
-    case apiError(statusCode: Int, message: String)
+// 完整的類實現，而不是擴展
+class OpenAIService: @unchecked Sendable {
+    // 日誌對象
+    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "OpenAIService")
     
-    var localizedDescription: String {
-        switch self {
-        case .emptyText:
-            return "文本為空，無法處理"
-        case .invalidAPIKey:
-            return "API金鑰無效或為空"
-        case .invalidResponse:
-            return "收到無效的API響應"
-        case .noData:
-            return "API沒有返回數據"
-        case .parsingError:
-            return "無法解析API響應數據"
-        case .apiError(let statusCode, let message):
-            return "API錯誤 (HTTP \(statusCode)): \(message)"
+    // API基本URL
+    private let apiURL = "https://api.openai.com/v1/chat/completions"
+    
+    // 初始化
+    init() {
+        logger.debug("OpenAIService初始化")
+    }
+    
+    // 驗證API金鑰
+    func validateAPIKey(_ apiKey: String) async throws {
+        logger.debug("驗證API金鑰")
+        
+        // 創建一個簡單的請求以檢查API金鑰是否有效
+        guard let url = URL(string: "https://api.openai.com/v1/models") else {
+            logger.error("無效的API URL")
+            throw OpenAIError.unexpectedError("無效的API URL")
         }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        
+        do {
+            // 設置超時時間為10秒
+            let (_, response) = try await URLSession.shared.data(for: request, delegate: nil)
+            
+            // 檢查HTTP狀態碼
+            guard let httpResponse = response as? HTTPURLResponse else {
+                logger.error("無法獲取HTTP響應")
+                throw OpenAIError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200...299:
+                logger.debug("API金鑰驗證成功")
+                return // 成功
+            case 401:
+                logger.error("API金鑰無效")
+                throw OpenAIError.invalidAPIKey
+            case 400...499:
+                logger.error("客戶端錯誤: \(httpResponse.statusCode)")
+                throw OpenAIError.clientError("HTTP \(httpResponse.statusCode)")
+            case 500...599:
+                logger.error("服務器錯誤: \(httpResponse.statusCode)")
+                throw OpenAIError.serverError("HTTP \(httpResponse.statusCode)")
+            default:
+                logger.error("未預期的狀態碼: \(httpResponse.statusCode)")
+                throw OpenAIError.unexpectedError("未預期的狀態碼: \(httpResponse.statusCode)")
+            }
+        } catch let urlError as URLError {
+            if urlError.code == .timedOut {
+                logger.error("請求超時")
+                throw OpenAIError.timeout
+            } else {
+                logger.error("網絡錯誤: \(urlError.localizedDescription)")
+                throw OpenAIError.networkError(urlError)
+            }
+        } catch let apiError as OpenAIError {
+            // 重新拋出OpenAIError
+            throw apiError
+        } catch {
+            logger.error("未知錯誤: \(error.localizedDescription)")
+            throw OpenAIError.unexpectedError(error.localizedDescription)
+        }
+    }
+    
+    // 使用流式API處理文本，通過回調提供更新
+    @Sendable
+    func streamOpenAiApi(
+        text: String, 
+        apiKeyProvider: @Sendable @escaping () -> String, 
+        systemPrompt: String = "", 
+        onNewContent: @escaping (String) -> Void
+    ) async throws {
+        logger.debug("準備 API 請求...")
+        
+        guard let url = URL(string: apiURL) else {
+            logger.error("無效的API URL")
+            throw OpenAIError.unexpectedError("無效的API URL")
+        }
+        
+        // 創建請求
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Bearer \(apiKeyProvider())", forHTTPHeaderField: "Authorization")
+
+        // 準備請求正文
+        let requestBody: [String: Any] = [
+            "model": "gpt-4o-mini",
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": "請將以下文字複寫，只需改錯字及語句不通順的地方。\n\n<text>\n\(text)\n</text>"]
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "stream": true
+        ]
+        
+        // 序列化請求正文
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            logger.error("請求序列化錯誤: \(error.localizedDescription)")
+            throw OpenAIError.unexpectedError("請求序列化錯誤")
+        }
+        
+        logger.debug("發送 API 請求...")
+        
+        // 執行請求並獲取流式回應
+        do {
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                logger.error("無效的HTTP響應")
+                throw OpenAIError.invalidResponse
+            }
+            
+            switch httpResponse.statusCode {
+            case 200:
+                logger.debug("API請求成功，開始處理回應")
+                
+                // 解析流式回應
+                var fullContent = ""
+                for try await line in bytes.lines {
+                    if line == "data: [DONE]" {
+                        break
+                    }
+                    
+                    if line.hasPrefix("data: "), let data = line.dropFirst(6).data(using: .utf8) {
+                        do {
+                            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                               let choices = json["choices"] as? [[String: Any]],
+                               let delta = choices.first?["delta"] as? [String: Any],
+                               let content = delta["content"] as? String {
+                                
+                                fullContent += content
+                                onNewContent(content)
+                            }
+                        } catch {
+                            logger.warning("解析流式數據失敗: \(error.localizedDescription)")
+                            // 繼續處理後續數據
+                        }
+                    }
+                }
+                
+                logger.debug("流式回應處理完成，總字符數: \(fullContent.count)")
+            case 401:
+                logger.error("API金鑰無效")
+                throw OpenAIError.invalidAPIKey
+            case 400...499:
+                logger.error("客戶端錯誤: \(httpResponse.statusCode)")
+                throw OpenAIError.clientError("HTTP \(httpResponse.statusCode)")
+            case 500...599:
+                logger.error("服務器錯誤: \(httpResponse.statusCode)")
+                throw OpenAIError.serverError("HTTP \(httpResponse.statusCode)")
+            default:
+                logger.error("未預期的狀態碼: \(httpResponse.statusCode)")
+                throw OpenAIError.unexpectedError("未預期的狀態碼: \(httpResponse.statusCode)")
+            }
+        } catch let urlError as URLError {
+            if urlError.code == .timedOut {
+                logger.error("請求超時")
+                throw OpenAIError.timeout
+            } else {
+                logger.error("網絡錯誤: \(urlError.localizedDescription)")
+                throw OpenAIError.networkError(urlError)
+            }
+        } catch let apiError as OpenAIError {
+            // 重新拋出特定的OpenAIError
+            logger.error("OpenAI錯誤: \(apiError)")
+            throw apiError
+        } catch {
+            logger.error("未知錯誤: \(error.localizedDescription)")
+            throw OpenAIError.unexpectedError(error.localizedDescription)
+        }
+    }
+    
+    @Sendable
+    func testApiKey(apiKeyProvider: @escaping () -> String) async throws -> Bool {
+        let url = URL(string: "https://api.openai.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("Bearer \(apiKeyProvider())", forHTTPHeaderField: "Authorization")
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            return httpResponse.statusCode == 200
+        }
+        
+        return false
     }
 }

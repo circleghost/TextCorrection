@@ -1,0 +1,15 @@
+{
+  "" : {
+    "const-values" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master.swiftconstvalues",
+    "dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master.d",
+    "diagnostics" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master.dia",
+    "emit-module-dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master-emit-module.dia",
+    "swift-dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/KeychainAccess-master.swiftdeps"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/Lib/KeychainAccess/Keychain.swift" : {
+    "index-unit-output-path" : "/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/Keychain.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/Keychain.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/KeychainAccess/build/KeychainAccess.build/Release/KeychainAccess.build/Objects-normal/arm64/Keychain.o"
+  }
+}

@@ -46,6 +46,22 @@ class HotKeyManager: @unchecked Sendable {
                                               selector: #selector(hotKeySettingsChanged),
                                               name: NSNotification.Name("HotKeySettingsChanged"),
                                               object: nil)
+        
+        // 立即嘗試設置熱鍵(如果已啟用)
+        if AppState.shared.isHotkeyActive {
+            logger.info("🔄 應用啟動時熱鍵功能已開啟，立即設置熱鍵")
+            let modifiers = AppState.shared.hotKeyModifiers
+            let character = AppState.shared.hotKeyCharacter
+            
+            // 在應用啟動時強制設置熱鍵
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self = self else { return }
+                self.setupHotKey()
+                self.logger.info("✅ 應用啟動後延遲1秒重新嘗試設置熱鍵")
+            }
+        } else {
+            logger.info("⚠️ 應用啟動時熱鍵功能未開啟")
+        }
     }
     
     // 設置與AppState的訂閱關係
@@ -123,6 +139,12 @@ class HotKeyManager: @unchecked Sendable {
         let modifiers = AppState.shared.hotKeyModifiers
         let keyCharacter = AppState.shared.hotKeyCharacter
         
+        logger.info("===== 熱鍵設置詳情 =====")
+        logger.info("是否啟用熱鍵: \(isActive)")
+        logger.info("修飾鍵: \(modifiers.joined(separator: ", "))")
+        logger.info("主鍵: \(keyCharacter)")
+        logger.info("=========================")
+        
         if !isActive {
             logger.info("熱鍵功能已禁用")
             return
@@ -137,37 +159,51 @@ class HotKeyManager: @unchecked Sendable {
             switch modifier.lowercased() {
             case "command":
                 modifierFlags.insert(.command)
+                logger.debug("添加修飾鍵: command")
             case "option":
                 modifierFlags.insert(.option)
+                logger.debug("添加修飾鍵: option")
             case "control":
                 modifierFlags.insert(.control)
+                logger.debug("添加修飾鍵: control")
             case "shift":
                 modifierFlags.insert(.shift)
+                logger.debug("添加修飾鍵: shift")
             default:
+                logger.warning("未知修飾鍵: \(modifier)")
                 break
             }
         }
+        
+        logger.info("轉換後的修飾鍵標誌: \(modifierFlags.rawValue)")
         
         // 轉換按鍵
         var key: Key?
         switch keyCharacter.lowercased() {
         case "space":
             key = .space
+            logger.debug("按鍵設置為: space")
         case "return":
             key = .return
+            logger.debug("按鍵設置為: return")
         case "delete":
             key = .delete
+            logger.debug("按鍵設置為: delete")
         case "up":
             key = .upArrow
+            logger.debug("按鍵設置為: upArrow")
         case "down":
             key = .downArrow
+            logger.debug("按鍵設置為: downArrow")
         default:
             // 單字符按鍵
             if let keyCode = keyCharacter.first?.asciiValue {
+                logger.debug("嘗試創建按鍵，ASCII值: \(keyCode)")
                 if let unwrappedKey = Key(carbonKeyCode: UInt32(keyCode - 97 + 0x00)) {
                     key = unwrappedKey
+                    logger.debug("成功創建按鍵: \(unwrappedKey.description)")
                 } else {
-                    logger.error("無法創建熱鍵: \(keyCharacter)")
+                    logger.error("無法創建熱鍵: \(keyCharacter)，ASCII值: \(keyCode)")
                     return
                 }
             } else {
@@ -178,6 +214,7 @@ class HotKeyManager: @unchecked Sendable {
         
         // 建立熱鍵
         if let unwrappedKey = key {
+            logger.info("嘗試使用鍵:\(unwrappedKey.description) 和修飾鍵:\(modifierFlags) 創建熱鍵")
             hotKey = HotKey(key: unwrappedKey, modifiers: modifierFlags)
             
             // 設置熱鍵觸發的動作
@@ -189,7 +226,7 @@ class HotKeyManager: @unchecked Sendable {
             if hotKey != nil {
                 logger.info("✅ 熱鍵註冊成功: \(unwrappedKey.description) 配合修飾鍵: \(modifierFlags)")
             } else {
-                logger.error("❌ 熱鍵註冊失敗")
+                logger.error("❌ 熱鍵註冊失敗 - 按鍵: \(unwrappedKey.description), 修飾鍵: \(modifierFlags)")
                 
                 // 檢查輔助功能權限並通知用戶
                 DispatchQueue.main.async { [weak self] in
@@ -232,6 +269,11 @@ class HotKeyManager: @unchecked Sendable {
         registerCarbonHotKey()  // 使用 Carbon API 註冊備用熱鍵
         registerGlobalShortcut()  // 使用全局事件監聽器註冊備用熱鍵
         logger.info("✅ 已添加備用熱鍵註冊機制")
+        
+        // 測試權限檢查
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        logger.info("輔助功能權限狀態: \(accessEnabled ? "已授權" : "未授權")")
     }
     
     // 移除全局監聽器

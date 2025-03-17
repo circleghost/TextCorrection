@@ -1,6 +1,5 @@
 import Cocoa
 import os.log
-import NaturalLanguage
 
 class TextProcessing: @unchecked Sendable {
     // 添加日誌對象
@@ -632,95 +631,39 @@ class TextProcessing: @unchecked Sendable {
     
     // 計算原始文本和重寫文本之間的變更詞數
     static func calculateChangedWords(original: String, rewritten: String) -> Int {
-        guard !original.isEmpty, !rewritten.isEmpty else {
-            return 0
-        }
+        // 預處理文本
+        let (processedOriginal, processedRewritten) = preprocessTexts(original: original, rewritten: rewritten)
         
-        // 將文本分詞
-        let originalWords = tokenizeText(original)
-        let rewrittenWords = tokenizeText(rewritten)
+        // 獲取差異
+        let diff = diffStrings(processedOriginal, processedRewritten)
         
-        // 使用Levenshtein距離算法計算編輯距離
-        let distance = levenshteinDistance(originalWords, rewrittenWords)
+        // 計算插入和刪除的詞數
+        var changedWordsCount = 0
         
-        logger.debug("原文詞數: \(originalWords.count), 修改後詞數: \(rewrittenWords.count), 編輯距離: \(distance)")
-        
-        return distance
-    }
-    
-    /// 對文本進行分詞
-    /// - Parameter text: 要分詞的文本
-    /// - Returns: 分詞結果數組
-    private static func tokenizeText(_ text: String) -> [String] {
-        var words: [String] = []
-        
-        // 創建中文分詞器
-        let tokenizer = NLTokenizer(using: .word)
-        tokenizer.string = text
-        
-        // 進行分詞
-        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
-            let word = String(text[range])
-            // 過濾空白和標點符號
-            if !word.trimmingCharacters(in: .whitespacesAndPunctuation).isEmpty {
-                words.append(word)
-            }
-            return true
-        }
-        
-        return words
-    }
-    
-    /// 計算兩個數組之間的Levenshtein距離（編輯距離）
-    /// - Parameters:
-    ///   - a: 第一個數組
-    ///   - b: 第二個數組
-    /// - Returns: 編輯距離
-    private static func levenshteinDistance<T: Equatable>(_ a: [T], _ b: [T]) -> Int {
-        // 創建一個(a.count+1) x (b.count+1)的矩陣
-        var matrix = [[Int]](repeating: [Int](repeating: 0, count: b.count + 1), count: a.count + 1)
-        
-        // 初始化第一行和第一列
-        for i in 0...a.count {
-            matrix[i][0] = i
-        }
-        
-        for j in 0...b.count {
-            matrix[0][j] = j
-        }
-        
-        // 填充矩陣
-        for i in 1...a.count {
-            for j in 1...b.count {
-                let cost = a[i-1] == b[j-1] ? 0 : 1
-                matrix[i][j] = min(
-                    matrix[i-1][j] + 1,     // 刪除
-                    matrix[i][j-1] + 1,     // 插入
-                    matrix[i-1][j-1] + cost // 替換或保持
-                )
+        for change in diff {
+            switch change {
+            case .insert(let text), .delete(let text):
+                // 根據語言特性拆分詞彙
+                // 對於中文，我們以字符為單位計算
+                // 對於英文和其他語言，我們以空格分隔的單詞為單位
+                
+                // 中文字符計數
+                let chineseCharCount = text.filter { isChineseCharacter($0) }.count
+                
+                // 英文單詞計數
+                let nonChineseText = text.filter { !isChineseCharacter($0) }
+                let words = nonChineseText.split(separator: " ")
+                let wordCount = words.count
+                
+                // 合計詞數變化
+                changedWordsCount += chineseCharCount + wordCount
+            case .equal:
+                // 相等部分不計入變更
+                break
             }
         }
         
-        // 返回右下角的值，即編輯距離
-        return matrix[a.count][b.count]
-    }
-    
-    /// 計算文本中的字符數（不包括空白字符）
-    /// - Parameter text: 要計算的文本
-    /// - Returns: 字符數
-    static func countNonWhitespaceCharacters(_ text: String) -> Int {
-        return text.filter { !$0.isWhitespace }.count
-    }
-    
-    /// 高亮顯示原文和修改後文本的差異
-    /// - Parameters:
-    ///   - original: 原始文本
-    ///   - corrected: 校正後的文本
-    /// - Returns: 用HTML標記差異的字符串
-    static func highlightDifferences(original: String, corrected: String) -> String {
-        // 這裡可以使用diff算法來高亮顯示差異
-        // 簡單起見，這裡返回一個未實現的提示
-        return "差異高亮功能尚未實現"
+        return changedWordsCount
     }
 }
 

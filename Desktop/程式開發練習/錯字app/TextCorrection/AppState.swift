@@ -118,6 +118,8 @@ class AppState: ObservableObject, @unchecked Sendable {
     ///   - modifiers: 修飾鍵陣列
     ///   - character: 主鍵字符
     func updateHotkeySettings(active: Bool, modifiers: [String]? = nil, character: String? = nil) {
+        logger.info("🔄 正在更新熱鍵設定: active=\(active), modifiers=\(modifiers?.description ?? "未變更"), character=\(character ?? "未變更")")
+        
         // 如果要啟用熱鍵，先檢查權限
         if active {
             // 檢查輔助功能權限
@@ -125,7 +127,7 @@ class AppState: ObservableObject, @unchecked Sendable {
             let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
             
             if !accessEnabled {
-                logger.warning("嘗試啟用熱鍵但缺少輔助功能權限")
+                logger.warning("⚠️ 嘗試啟用熱鍵但缺少輔助功能權限")
                 
                 // 在主線程上顯示權限請求對話框
                 DispatchQueue.main.async {
@@ -183,6 +185,11 @@ class AppState: ObservableObject, @unchecked Sendable {
             
             // 將更新操作派發到主線程
             DispatchQueue.main.async {
+                let oldActive = self.isHotkeyActive
+                let oldModifiers = self.hotKeyModifiers
+                let oldCharacter = self.hotKeyCharacter
+                
+                // 更新狀態
                 self.isHotkeyActive = active
                 
                 if let modifiers = modifiers {
@@ -193,10 +200,30 @@ class AppState: ObservableObject, @unchecked Sendable {
                     self.hotKeyCharacter = character
                 }
                 
+                // 保存設定
                 self.saveSettings()
+                self.logger.info("✅ 熱鍵設定已保存")
                 
-                // 如果有熱鍵管理器，通知其更新熱鍵設定
-                NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
+                // 檢查是否有變化
+                let hasChanges = (oldActive != active) || 
+                                (modifiers != nil && oldModifiers != self.hotKeyModifiers) || 
+                                (character != nil && oldCharacter != self.hotKeyCharacter)
+                
+                if hasChanges {
+                    self.logger.info("📣 熱鍵設定有變更，發送通知")
+                    // 發送熱鍵設定變更通知
+                    NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
+                    
+                    // 強制重新注冊熱鍵
+                    if let appDelegate = NSApp.delegate as? AppDelegate, let hotKeyManager = appDelegate.hotKeyManager {
+                        DispatchQueue.main.async {
+                            self.logger.info("⚙️ 正在重新設置熱鍵...")
+                            hotKeyManager.setupHotKey()
+                        }
+                    }
+                } else {
+                    self.logger.info("ℹ️ 熱鍵設定無變化，不發送通知")
+                }
                 
                 self.logger.debug("熱鍵設定已更新: 狀態=\(active), 修飾鍵=\(self.hotKeyModifiers), 主鍵=\(self.hotKeyCharacter)")
             }
@@ -246,14 +273,29 @@ class AppState: ObservableObject, @unchecked Sendable {
         // 載入熱鍵設定
         if defaults.object(forKey: "isHotkeyActive") != nil {
             self.isHotkeyActive = defaults.bool(forKey: "isHotkeyActive")
+            logger.info("從設定讀取熱鍵狀態: \(self.isHotkeyActive)")
+        } else {
+            // 首次執行，設置為預設值 (開啟)
+            self.isHotkeyActive = true
+            logger.info("首次執行，設置熱鍵狀態為默認開啟")
         }
         
         if let modifiers = defaults.stringArray(forKey: "hotKeyModifiers") {
             self.hotKeyModifiers = modifiers
+            logger.info("從設定讀取熱鍵修飾鍵: \(modifiers)")
+        } else {
+            // 首次執行，設置為預設值
+            self.hotKeyModifiers = ["shift", "control"]
+            logger.info("首次執行，設置熱鍵修飾鍵為默認值: ['shift', 'control']")
         }
         
         if let character = defaults.string(forKey: "hotKeyCharacter") {
             self.hotKeyCharacter = character
+            logger.info("從設定讀取熱鍵字符: \(character)")
+        } else {
+            // 首次執行，設置為預設值
+            self.hotKeyCharacter = "space"
+            logger.info("首次執行，設置熱鍵字符為默認值: 'space'")
         }
         
         // 載入剪貼板監控設定
@@ -261,7 +303,13 @@ class AppState: ObservableObject, @unchecked Sendable {
             self.isClipboardMonitoringEnabled = defaults.bool(forKey: "isClipboardMonitoringEnabled")
         }
         
-        logger.info("設定已載入")
+        // 首次載入完成後保存設定，確保默認值被寫入
+        if defaults.object(forKey: "isHotkeyActive") == nil {
+            saveSettings()
+            logger.info("首次執行，保存默認設定到 UserDefaults")
+        }
+        
+        logger.info("設定已載入，當前熱鍵狀態: \(self.isHotkeyActive), 修飾鍵: \(self.hotKeyModifiers), 主鍵: \(self.hotKeyCharacter)")
     }
     
     /// 保存單個設定到 UserDefaults

@@ -246,22 +246,7 @@ struct ParticleEffectView: View {
 
 /// 主文本校正視圖
 struct TextCorrectionView: View, @unchecked Sendable {
-    // 暫時移除AppStateObserver
-    // @EnvironmentObject var appStateObserver: AppStateObserver
-    // @Environment(\.appState) private var appState
-    
-    // 添加本地狀態變量
-    @State private var originalText: String = ""
-    @State private var correctedText: String = ""
-    @State private var isProcessing: Bool = false
-    @State private var changedWordsCount: Int = 0
-    @State private var textProcessingTime: Double = 0.0
-    @State private var originalCharacterCount: Int = 0
-    @State private var correctedCharacterCount: Int = 0
-    @State private var isVisualEffectsEnabled: Bool = true
-    @State private var isParticleEffectsEnabled: Bool = true
-    @State private var lastError: String = ""
-    
+    @EnvironmentObject private var appState: AppState
     @State private var showingSettings = false
     @State private var showCopySuccessIndicator = false
     @State private var isTextVisible = false
@@ -269,19 +254,6 @@ struct TextCorrectionView: View, @unchecked Sendable {
     
     // 添加日誌支持
     private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextCorrectionView")
-    
-    // 用於跟踪當前活動的文本
-    @State private var activeText: ActiveText = .original
-    
-    // 定義一個枚舉來跟踪當前活動的文本
-    enum ActiveText {
-        case original
-        case corrected
-    }
-    
-    init() {
-        logger.info("TextCorrectionView 已初始化")
-    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -318,33 +290,32 @@ struct TextCorrectionView: View, @unchecked Sendable {
                 )
                 
                 // 僅當啟用視覺效果時顯示流光效果
-                if isVisualEffectsEnabled {
+                if appState.isVisualEffectsEnabled {
                     FlowingGlowView()
                         .opacity(0.15)
                 }
                 
                 VStack(spacing: 15) {
                     // 文本顯示區域
-                    if isProcessing {
-                        ProgressView {
+                    if appState.isProcessing {
+                        ProgressView(value: appState.processingProgress) {
                             Text("處理中...")
                                 .foregroundColor(.white)
                         }
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.4, green: 0.6, blue: 0.9)))
+                        .progressViewStyle(LinearProgressViewStyle(tint: Color(red: 0.4, green: 0.6, blue: 0.9)))
                         .padding()
                         .scaleEffect(1.2)
-                    
-                        if !lastError.isEmpty {
-                            Text("發生錯誤：\(lastError)")
-                                .foregroundColor(.red)
-                                .padding()
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                    } else if !correctedText.isEmpty {
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: appState.processingProgress)
+                    } else if !appState.errorMessage.isEmpty {
+                        Text("發生錯誤：\(appState.errorMessage)")
+                            .foregroundColor(.red)
+                            .padding()
+                            .transition(.scale.combined(with: .opacity))
+                    } else if !appState.correctedText.isEmpty {
                         ZStack {
                             TextDifferenceView(
-                                originalText: originalText,
-                                correctedText: correctedText
+                                originalText: appState.originalText,
+                                correctedText: appState.correctedText
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(
@@ -359,91 +330,45 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                 withAnimation {
                                     isTextVisible = true
                                 }
-                                showParticles = isParticleEffectsEnabled
+                                showParticles = appState.isParticleEffectsEnabled
                             }
                             
                             // 粒子效果層
                             if showParticles {
                                 ParticleEffectView()
+                                    .environmentObject(appState)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .allowsHitTesting(false)
                             }
                         }
                     } else {
-                        // 原始文本和校正後的文本
-                        HStack(spacing: 20) {
-                            // 原始文本
-                            VStack {
-                                Text("原始文本")
-                                    .font(.headline)
-                                
-                                TextEditor(text: $originalText)
-                                    .font(.system(size: 14))
-                                    .frame(minHeight: 200)
-                                    .padding(10)
-                                    .background(Color(.textBackgroundColor))
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(activeText == .original ? Color.blue : Color.gray, lineWidth: 2)
-                                    )
-                                    .onTapGesture {
-                                        activeText = .original
-                                    }
-                            }
-                            
-                            // 校正後的文本
-                            VStack {
-                                Text("校正後的文本")
-                                    .font(.headline)
-                                
-                                TextEditor(text: $correctedText)
-                                    .font(.system(size: 14))
-                                    .frame(minHeight: 200)
-                                    .padding(10)
-                                    .background(Color(.textBackgroundColor))
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(activeText == .corrected ? Color.blue : Color.gray, lineWidth: 2)
-                                    )
-                                    .onTapGesture {
-                                        activeText = .corrected
-                                    }
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // 初始狀態或等待文本輸入
-                        VStack(spacing: 20) {
-                            Image(systemName: "text.bubble")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray)
-                            
-                            Text("等待文本輸入...")
-                                .font(.headline)
-                                .foregroundColor(.gray)
-                            
-                            // 如果有初始文本，在視圖出現時設置
-                            if !originalText.isEmpty {
-                                Text("正在載入...")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray.opacity(0.7))
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color(NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8)))
-                                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                        )
-                        .padding([.horizontal, .top])
+                        Text("尚無文本校正結果")
+                            .foregroundColor(.gray)
+                            .padding()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color(NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8)))
+                            .cornerRadius(10)
+                            .padding([.horizontal, .top])
                     }
                     
-                    // 狀態與控制區域
+                    // 底部狀態區
+                    HStack {
+                        Text("字元數: \(appState.characterCount)")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                        
+                        Spacer()
+                        
+                        Text("⌘+C 複製文字")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                    }
+                    .padding(.horizontal)
+                    
+                    // 底部操作區
                     HStack {
                         // 為底部區域添加光暈效果
-                        if isVisualEffectsEnabled && !correctedText.isEmpty {
+                        if appState.isVisualEffectsEnabled && !appState.correctedText.isEmpty {
                             Circle()
                                 .fill(
                                     RadialGradient(
@@ -458,54 +383,32 @@ struct TextCorrectionView: View, @unchecked Sendable {
                                 .offset(x: -40, y: 0)
                         }
                         
-                        // 顯示處理數據
-                        if !correctedText.isEmpty {
-                            HStack(spacing: 15) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("字符")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.gray)
-                                    Text("\(originalCharacterCount) → \(correctedCharacterCount)")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("更改字數")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.gray)
-                                    Text("\(changedWordsCount)")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("處理時間")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.gray)
-                                    Text("\(String(format: "%.2f", textProcessingTime))秒")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                        
                         Spacer()
                         
-                        // 複製按鈕
-                        if !correctedText.isEmpty {
-                            Button(action: {
-                                copyText()
-                            }) {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.system(size: 14))
-                                    Text("複製")
-                                        .font(.system(size: 14, weight: .medium))
+                        ZStack {
+                            Button("複製並貼上") {
+                                logger.debug("複製並貼上按鈕被點擊")
+                                copyAndPaste()
+                                
+                                // 顯示複製成功指示
+                                withAnimation {
+                                    showCopySuccessIndicator = true
                                 }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
+                                
+                                // 3秒後自動隱藏
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                    withAnimation {
+                                        showCopySuccessIndicator = false
+                                    }
+                                }
+                                
+                                // 如果粒子效果已啟用，顯示粒子效果爆發
+                                if appState.isParticleEffectsEnabled {
+                                    // 此處可以添加特殊的粒子爆發效果
+                                }
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(
@@ -559,65 +462,54 @@ struct TextCorrectionView: View, @unchecked Sendable {
         .frame(minWidth: 500, minHeight: 300)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                // .environmentObject(appStateObserver)
+                .environmentObject(appState)
         }
         .onAppear {
             logger.debug("TextCorrectionView 出現")
-            
-            // 從UserDefaults加載設置
-            loadSettings()
-            
-            // 設置初始值
-            activeText = .original
-            originalText = ""
-            
             // 更新窗口狀態
-            Task {
-                // await appState.setActiveScreen(.textCorrection)
-            }
+            updateWindowState(isOpen: true)
+        }
+        .onDisappear {
+            logger.debug("TextCorrectionView 消失")
+            // 更新窗口狀態
+            updateWindowState(isOpen: false)
+            
+            // 重置動畫狀態
+            isTextVisible = false
+            showParticles = false
         }
     }
     
-    // 加載設置
-    private func loadSettings() {
-        let defaults = UserDefaults.standard
-        isVisualEffectsEnabled = defaults.bool(forKey: "isVisualEffectsEnabled")
-        isParticleEffectsEnabled = defaults.bool(forKey: "isParticleEffectsEnabled")
-        
-        logger.info("已加載設置: 視覺效果=\(isVisualEffectsEnabled), 粒子效果=\(isParticleEffectsEnabled)")
-    }
-    
-    // 顯示設置視圖
+    // 顯示設置窗口
     private func showSettings() {
+        logger.debug("顯示設置窗口")
         showingSettings = true
+        appState.isSettingsWindowOpen = true
     }
     
-    // 複製已校正的文本
-    private func copyText() {
-        let text = correctedText
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+    // 更新窗口狀態
+    private func updateWindowState(isOpen: Bool) {
+        appState.isTextWindowOpen = isOpen
+        logger.debug("文本窗口狀態更新為: \(isOpen)")
+        // AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: isOpen)
+    }
+    
+    // 複製並貼上功能
+    private func copyAndPaste() {
+        logger.debug("執行複製並貼上操作")
+        // AppKitBridge.shared.copyAndPasteCorrectedText()
         
-        // 顯示成功指示器
-        withAnimation {
-            showCopySuccessIndicator = true
-        }
-        
-        // 3秒後隱藏
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            withAnimation {
-                showCopySuccessIndicator = false
-            }
-        }
-        
-        // 發送複製成功通知 - 暫時移除
-        // Task {
-        //     await appState.addNotification(type: .success, message: "文本已複製到剪貼板！")
-        // }
+        // 臨時實現，直接複製文本
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(appState.correctedText, forType: .string)
+        logger.debug("文本已複製到剪貼板")
+        #endif
     }
 }
 
 #Preview {
     TextCorrectionView()
-        // .environmentObject(AppState.shared)
+        .environmentObject(AppState.shared)
 } 

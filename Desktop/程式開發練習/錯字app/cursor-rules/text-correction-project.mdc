@@ -1,0 +1,90 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# TextCorrection 專案規則
+
+## 專案概述
+
+TextCorrection 是一個 macOS 應用程式，用於自動糾正與提升中文文本質量。透過 OpenAI API 分析並優化文本，特別關注繁體中文的語法、標點和格式。
+
+**重要：本專案正在進行架構遷移，從 AppKit (Cocoa) 逐步改版至 SwiftUI。請在開發時優先考慮使用 SwiftUI 實現新功能，並逐步替換現有的 AppKit 元素。**
+
+## 系統架構
+
+應用目前採用混合架構，正在從傳統 AppKit 向 SwiftUI 遷移：
+
+- **AppDelegate**: 應用程式的主要邏輯控制器，協調各服務之間的交互
+- **StatusItemManager**: 管理狀態欄圖標和相關菜單
+- **TextWindowManager**: 管理文本處理窗口的創建和顯示
+- **OpenAIService**: 負責與 OpenAI API 交互
+- **TextProcessing**: 處理文本對比和差異高亮顯示
+
+## 編碼規範
+
+### 命名慣例
+
+- 使用清晰的、描述性的命名
+- 類別和結構體使用 PascalCase
+- 變數和函數使用 camelCase
+- 常量使用 camelCase，但可考慮全部大寫的 SNAKE_CASE 用於真正的常量
+
+### 文件組織
+
+- 按功能模組組織代碼
+- 相關功能放在同一個文件中
+- 每個文件頂部包含版權聲明和創建信息
+
+### 註釋規範
+
+- 使用清晰的註釋解釋複雜邏輯
+- 主要功能和API需要詳細註釋
+- 文件頂部應有概述註釋
+
+### 錯誤處理
+
+- 適當使用 try/catch 機制
+- 定義專用的錯誤類型 (如 TextCorrectionError)
+- 錯誤訊息應該明確且用戶友好
+
+## UI/UX 設計原則
+
+- 保持簡潔、直觀的用戶界面
+- **優先使用 SwiftUI**，但可在必要時使用 AppKit 元素
+- 遵循 macOS 人機界面指南
+- 確保文本差異對比易於識別（用顏色和樣式）
+- 支援深色模式
+
+## SwiftUI 編碼規範
+
+### 視圖結構
+
+- 使用 `some View` 返回類型
+- 大型視圖分解為子視圖組件
+- 使用 `@ViewBuilder` 構建複雜佈局
+
+### 狀態管理
+
+- 使用 `@State` 管理視圖內部狀態
+- 使用 `@AppStorage` 替代 UserDefaults 直接訪問
+- 使用 `@ObservedObject` 和 `@EnvironmentObject` 共享狀態
+
+### SwiftUI/AppKit 橋接
+
+- 使用 `NSViewRepresentable` 包裝 AppKit 視圖
+- 使用 `NSHostingController` 在 AppKit 中顯示 SwiftUI 視圖
+- 避免直接修改 AppKit 視圖的特性
+
+## OpenAI API 使用規範
+
+- 使用適當的 model (gpt-4o-mini)
+- 適當處理 API 流式響應
+- 使用明確的系統提示確保一致的輸出
+- 安全存儲和管理 API 密鑰
+
+## 安全考量
+
+- API 密鑰應存儲在 Keychain 中
+- 用戶數據應適當保護
+- 注意處理敏感信息的方式 

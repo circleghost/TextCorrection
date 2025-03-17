@@ -151,24 +151,19 @@ extension View {
 
 // MARK: - 主視圖
 struct SettingsView: View, @unchecked Sendable {
-    // 暫時移除環境對象引用，使用本地狀態
-    // @EnvironmentObject private var appStateObserver: AppStateObserver
-    // @Environment(\.appState) private var appState
-    
-    @State private var isVisualEffectsEnabled: Bool = true
-    @State private var isParticleEffectsEnabled: Bool = true
-    @State private var isHotkeyActive: Bool = false
-    @State private var correctionHotkeyString: String = ""
-    @State private var isClipboardMonitoringEnabled: Bool = false
-    @State private var fontSize: CGFloat = 14
-    @State private var isApiKeyValid: Bool = false
     @State private var apiKey: String = ""
-    @State private var isOpenAIServiceAvailable: Bool = true
-    
-    @State private var showingAPIKeyDialog = false
-    @State private var isValidatingApiKey = false
+    @State private var isSaving: Bool = false
+    @State private var message: String = ""
+    @State private var showMessage: Bool = false
+    @State private var isSuccess: Bool = false
     @State private var selectedTab = 0
     @State private var showHotkeyCustomizationSheet = false
+    @State private var tempModifiers: [String] = []
+    @State private var tempCharacter: String = ""
+    @State private var isValidating: Bool = false
+    
+    // 使用 AppState 進行狀態管理
+    @EnvironmentObject private var appState: AppState
     
     // 環境變數，用於關閉視窗
     @Environment(\.dismiss) private var dismiss
@@ -176,90 +171,109 @@ struct SettingsView: View, @unchecked Sendable {
     // 添加日誌支持
     private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "SettingsView")
     
+    private let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+    private let openAIService = OpenAIService()
+    
     var body: some View {
         VStack(spacing: 0) {
-            // 頂部標題欄
+            // 頂部標題區域
             HStack {
-                Text("設定")
+                Text("TextCorrection 設定")
                     .font(UIConstants.titleFont)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
                 Button(action: {
-                    resetSettings()
+                    dismiss()
                 }) {
-                    Text("重置")
-                        .font(UIConstants.bodyFont)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.gray)
                 }
                 .buttonStyle(.plain)
             }
-            .padding()
-            .background(Color(NSColor.windowBackgroundColor))
+            .padding(UIConstants.spacing)
+            .padding(.bottom, UIConstants.spacing / 2)
             
-            // 標籤選擇欄
-            HStack(spacing: 0) {
-                tabButton(title: "一般", systemImage: "gear", tag: 0)
-                tabButton(title: "外觀", systemImage: "paintbrush", tag: 1)
-                tabButton(title: "API", systemImage: "network", tag: 2)
-                tabButton(title: "關於", systemImage: "info.circle", tag: 3)
+            // 分頁選擇
+            HStack(spacing: UIConstants.spacing) {
+                tabButton(title: "一般設定", systemImage: "gear", tag: 0)
+                tabButton(title: "API設定", systemImage: "key", tag: 1)
+                tabButton(title: "進階設定", systemImage: "slider.horizontal.3", tag: 2)
+                
                 Spacer()
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-            .background(Color(NSColor.windowBackgroundColor))
+            .padding(.horizontal, UIConstants.spacing)
+            .padding(.bottom, UIConstants.spacing)
             
-            // 分隔線
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 1)
+            Divider()
+                .padding(.bottom, UIConstants.spacing)
             
-            // 內容區域
+            // 主內容區
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    // 根據選項卡顯示不同的設置
-                    switch selectedTab {
-                    case 0:
+                VStack(spacing: UIConstants.sectionSpacing) {
+                    if selectedTab == 0 {
                         generalSettingsView
-                    case 1:
-                        appearanceSettingsView
-                    case 2:
+                    } else if selectedTab == 1 {
                         apiSettingsView
-                    case 3:
-                        aboutView
-                    default:
-                        generalSettingsView
+                    } else {
+                        advancedSettingsView
                     }
                 }
-                .padding(.top)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, UIConstants.spacing * 2)
             }
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-        }
-        .onAppear {
-            // 從UserDefaults加載設置
-            let defaults = UserDefaults.standard
             
-            isVisualEffectsEnabled = defaults.bool(forKey: "visualEffects")
-            isParticleEffectsEnabled = defaults.bool(forKey: "particleEffects")
-            isHotkeyActive = defaults.bool(forKey: "hotkeysEnabled")
-            correctionHotkeyString = defaults.string(forKey: "correctionHotkey") ?? ""
-            isClipboardMonitoringEnabled = defaults.bool(forKey: "clipboardMonitoring")
-            apiKey = defaults.string(forKey: "apiKey") ?? ""
-            fontSize = defaults.double(forKey: "fontSize") > 0 ? defaults.double(forKey: "fontSize") : 14
+            Divider()
+                .padding(.top, UIConstants.spacing)
             
-            // 驗證API密鑰
-            isApiKeyValid = !apiKey.isEmpty
-            
-            logger.debug("設置視圖已出現")
+            // 底部版本資訊和重置按鈕
+            HStack {
+                Button(action: {
+                    logger.debug("重置設定按鈕被點擊")
+                    appState.resetSettings()
+                    showSuccessMessage("所有設定已重置")
+                }) {
+                    Text("重置所有設定")
+                        .font(UIConstants.bodyFont)
+                }
+                .buttonStyle(LinearButtonStyle(isPrimary: false, isDanger: true))
+                
+                Spacer()
+                
+                HStack {
+                    Text("TextCorrection")
+                        .font(UIConstants.captionFont.weight(.medium))
+                    Text("版本 1.0")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding(UIConstants.spacing)
         }
-        .sheet(isPresented: $showHotkeyCustomizationSheet) {
-            HotkeyCustomizationView(isHotkeyActive: $isHotkeyActive, hotkeyString: $correctionHotkeyString)
+        .frame(width: UIConstants.windowWidth, height: UIConstants.windowHeight)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onAppear(perform: {
+            logger.debug("SettingsView 出現")
+            loadApiKey()
+            updateWindowState(isOpen: true)
+        })
+        .onDisappear {
+            logger.debug("SettingsView 消失")
+            updateWindowState(isOpen: false)
         }
-        .frame(width: 500, height: 400)
+        .alert(isSuccess ? "成功" : "錯誤", isPresented: $showMessage) {
+            Button("確定") {
+                if isSuccess {
+                    dismiss()
+                }
+            }
+        } message: {
+            Text(message)
+        }
     }
     
-    // MARK: - 標籤按鈕
+    // 頁籤按鈕
     private func tabButton(title: String, systemImage: String, tag: Int) -> some View {
         Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -298,10 +312,8 @@ struct SettingsView: View, @unchecked Sendable {
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     Toggle(isOn: Binding(
-                        get: { isHotkeyActive },
-                        set: { newValue in 
-                            isHotkeyActive = newValue
-                        }
+                        get: { appState.isHotkeyActive },
+                        set: { appState.updateHotkey(active: $0) }
                     )) {
                         Text("啟用熱鍵")
                     }
@@ -312,7 +324,7 @@ struct SettingsView: View, @unchecked Sendable {
                     HStack {
                         Text("校正文字:")
                         Spacer()
-                        Text(correctionHotkeyString.isEmpty ? "尚未設置" : correctionHotkeyString)
+                        Text("\(formatModifiers(appState.hotKeyModifiers)) + \(formatKey(appState.hotKeyCharacter))")
                             .font(UIConstants.bodyFont.weight(.medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -334,508 +346,473 @@ struct SettingsView: View, @unchecked Sendable {
             
             // 剪貼板設定
             VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
-                Text("剪貼板監控")
+                Text("剪貼板設定")
                     .font(UIConstants.sectionFont)
                     .padding(.horizontal, UIConstants.spacing)
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     Toggle(isOn: Binding(
-                        get: { isClipboardMonitoringEnabled },
-                        set: { newValue in 
-                            isClipboardMonitoringEnabled = newValue
-                        }
+                        get: { appState.isClipboardMonitoringEnabled },
+                        set: { appState.updateClipboardMonitoring(enabled: $0) }
                     )) {
-                        Text("監控剪貼板")
+                        Text("啟用剪貼板監控")
                     }
                     .toggleStyle(LinearToggleStyle())
                     
-                    Text("當啟用時，應用程式將監控剪貼板變化並提供快速校正選項")
-                        .font(UIConstants.bodyFont)
+                    Text("當剪貼板有新的文本內容時自動檢測並提供校正選項")
+                        .font(UIConstants.captionFont)
                         .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .cardStyle()
-            }
-            
-            // 字體大小設定
-            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
-                Text("顯示設定")
-                    .font(UIConstants.sectionFont)
-                    .padding(.horizontal, UIConstants.spacing)
-                
-                VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                    HStack {
-                        Text("字體大小")
-                        Spacer()
-                        Text("\(Int(fontSize))")
-                            .frame(width: 30)
-                        Stepper("", value: Binding(
-                            get: { fontSize },
-                            set: { newValue in 
-                                fontSize = newValue
-                            }
-                        ), in: 10...30, step: 1)
-                    }
+                        .padding(.top, 4)
                 }
                 .cardStyle()
             }
         }
-        .padding(.bottom, UIConstants.spacing)
-    }
-    
-    // 外觀設定視圖
-    private var appearanceSettingsView: some View {
-        VStack(alignment: .leading, spacing: UIConstants.groupSpacing) {
-            // 視覺效果設定
-            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
-                Text("視覺效果")
-                    .font(UIConstants.sectionFont)
-                    .padding(.horizontal, UIConstants.spacing)
-                
-                VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                    Toggle(isOn: Binding(
-                        get: { isVisualEffectsEnabled },
-                        set: { newValue in 
-                            isVisualEffectsEnabled = newValue
-                        }
-                    )) {
-                        Text("啟用視覺效果")
-                    }
-                    .toggleStyle(LinearToggleStyle())
-                    
-                    Toggle(isOn: Binding(
-                        get: { isParticleEffectsEnabled },
-                        set: { newValue in 
-                            isParticleEffectsEnabled = newValue
-                        }
-                    )) {
-                        Text("啟用粒子特效")
-                    }
-                    .toggleStyle(LinearToggleStyle())
-                    
-                    Text("視覺效果可能會影響性能，在較舊的設備上可能導致應用程式運行緩慢")
-                        .font(UIConstants.bodyFont)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .cardStyle()
-            }
+        .sheet(isPresented: $showHotkeyCustomizationSheet) {
+            hotkeyCustomizationView
         }
-        .padding(.bottom, UIConstants.spacing)
     }
     
     // API設定視圖
     private var apiSettingsView: some View {
         VStack(alignment: .leading, spacing: UIConstants.groupSpacing) {
             VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
-                Text("API設定")
+                Text("OpenAI API 設定")
                     .font(UIConstants.sectionFont)
                     .padding(.horizontal, UIConstants.spacing)
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                    HStack {
-                        Text("API金鑰")
-                        Spacer()
-                        if isApiKeyValid {
-                            Text("有效")
-                                .foregroundColor(.green)
-                                .font(UIConstants.bodyFont.weight(.medium))
-                        } else {
-                            Text("無效")
-                                .foregroundColor(.red)
-                                .font(UIConstants.bodyFont.weight(.medium))
-                        }
-                    }
-                    
-                    // 不顯示實際金鑰，只顯示掩碼
-                    Text(maskApiKey(apiKey))
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(UIConstants.secondaryColor.opacity(0.3))
-                        .cornerRadius(UIConstants.cornerRadius)
-                    
-                    Button(action: {
-                        showingAPIKeyDialog = true
-                    }) {
-                        Text("更改API金鑰")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(LinearButtonStyle(isPrimary: false))
-                }
-                .cardStyle()
-            }
-            
-            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
-                Text("連接資訊")
-                    .font(UIConstants.sectionFont)
-                    .padding(.horizontal, UIConstants.spacing)
-                
-                VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                    HStack {
-                        Text("OpenAI服務")
-                        Spacer()
-                        if isOpenAIServiceAvailable {
-                            Text("可用")
-                                .foregroundColor(.green)
-                                .font(UIConstants.bodyFont.weight(.medium))
-                        } else {
-                            Text("不可用")
-                                .foregroundColor(.red)
-                                .font(UIConstants.bodyFont.weight(.medium))
-                        }
-                    }
-                    
-                    Button("測試連接") {
-                        // 開始測試連接
-                        isValidatingApiKey = true
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("API 金鑰")
+                            .font(UIConstants.bodyFont.weight(.medium))
                         
-                        // 呼叫驗證API金鑰的方法
-                        Task {
-                            let key = apiKey
-                            if !key.isEmpty {
-                                await appState.validateApiConnection()
-                            } else {
-                                logger.warning("無法測試連接：API金鑰為空")
+                        HStack {
+                            SecureField("輸入 OpenAI API 金鑰", text: $apiKey)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .font(UIConstants.bodyFont)
+                                .padding(12)
+                                .background(Color(NSColor.textBackgroundColor))
+                                .cornerRadius(UIConstants.cornerRadius)
+                            
+                            Button(action: saveApiKey) {
+                                HStack {
+                                    if isSaving {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                            .frame(width: 16, height: 16)
+                                    }
+                                    Text("儲存")
+                                }
                             }
+                            .buttonStyle(LinearButtonStyle())
+                            .disabled(isSaving || apiKey.isEmpty)
                         }
                     }
-                    .buttonStyle(LinearButtonStyle(isPrimary: true))
-                    .disabled(isValidatingApiKey || apiKey.isEmpty)
+                    
+                    HStack {
+                        Button(action: validateApiKey) {
+                            Text("驗證 API 金鑰")
+                        }
+                        .buttonStyle(LinearButtonStyle(isPrimary: false))
+                        .disabled(isSaving || apiKey.isEmpty)
+                        
+                        Spacer()
+                        
+                        HStack(spacing: UIConstants.spacing / 2) {
+                            Circle()
+                                .fill(appState.isApiKeyValid ? UIConstants.successColor : UIConstants.dangerColor)
+                                .frame(width: 10, height: 10)
+                            
+                            Text(appState.isApiKeyValid ? "API 金鑰已驗證" : "API 金鑰未驗證")
+                                .font(UIConstants.captionFont)
+                                .foregroundColor(appState.isApiKeyValid ? UIConstants.successColor : UIConstants.dangerColor)
+                        }
+                    }
+                    .padding(.top, 8)
+                    
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    Text("API 金鑰安全儲存在 macOS 系統鑰匙圈(Keychain)中，即使應用程式關閉也不會丟失。")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.secondary)
+                }
+                .cardStyle()
+                
+                Text("OpenAI API 金鑰用於訪問 OpenAI 的文本處理服務，需要有效的 API 金鑰才能使用文本校正功能。")
+                    .font(UIConstants.captionFont)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, UIConstants.spacing)
+                    .padding(.top, 4)
+            }
+        }
+    }
+    
+    // 進階設定視圖
+    private var advancedSettingsView: some View {
+        VStack(alignment: .leading, spacing: UIConstants.groupSpacing) {
+            // 介面設定
+            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+                Text("介面設定")
+                    .font(UIConstants.sectionFont)
+                    .padding(.horizontal, UIConstants.spacing)
+                
+                VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                    Toggle(isOn: Binding(
+                        get: { appState.isVisualEffectsEnabled },
+                        set: { appState.updateVisualEffects(enabled: $0) }
+                    )) {
+                        Text("啟用視覺效果")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                    
+                    Toggle(isOn: Binding(
+                        get: { appState.isParticleEffectsEnabled },
+                        set: { appState.updateParticleEffects(enabled: $0) }
+                    )) {
+                        Text("啟用粒子效果")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                    
+                    Toggle(isOn: Binding(
+                        get: { appState.isAnimationsEnabled },
+                        set: { appState.updateAnimations(enabled: $0) }
+                    )) {
+                        Text("啟用動畫")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                    
+                    Toggle(isOn: Binding(
+                        get: { appState.isHighQualityEffectsEnabled },
+                        set: { appState.updateHighQualityEffects(enabled: $0) }
+                    )) {
+                        Text("高品質效果")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                }
+                .cardStyle()
+            }
+            
+            // 效能設定
+            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+                Text("效能設定")
+                    .font(UIConstants.sectionFont)
+                    .padding(.horizontal, UIConstants.spacing)
+                
+                VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                    Toggle(isOn: .constant(true)) {
+                        Text("背景處理")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                    
+                    Text("允許應用在背景中處理文本，以獲得更快的回應時間")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
                 .cardStyle()
             }
         }
-        .padding(.bottom, UIConstants.spacing)
-        .sheet(isPresented: $showingAPIKeyDialog) {
-            ApiKeyInputView(apiKey: $apiKey)
-        }
     }
     
-    // 關於視圖
-    private var aboutView: some View {
-        VStack(alignment: .leading, spacing: UIConstants.groupSpacing) {
-            VStack(alignment: .center, spacing: UIConstants.spacing) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 50))
-                    .foregroundColor(UIConstants.primaryColor)
-                
-                Text("文本校正")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("版本 1.0.0")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Divider()
-                    .padding(.vertical)
-                
-                Text("這是一個使用 OpenAI API 進行文本校正的應用程式，能夠檢查並修正中文寫作中的常見錯誤。")
-                    .font(UIConstants.bodyFont)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                
-                HStack(spacing: 20) {
-                    Button("查看許可") {
-                        // 打開許可協議
-                    }
-                    .buttonStyle(LinearButtonStyle(isPrimary: false))
-                    
-                    Button("網站") {
-                        // 打開網站
-                        if let url = URL(string: "https://openai.com") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                    .buttonStyle(LinearButtonStyle(isPrimary: true))
-                }
-                .padding(.top)
+    // 更新窗口狀態
+    private func updateWindowState(isOpen: Bool) {
+        appState.isSettingsWindowOpen = isOpen
+        logger.debug("設置窗口狀態更新為: \(isOpen)")
+        // AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: isOpen)
+    }
+    
+    private func loadApiKey() {
+        do {
+            if let storedKey = try keychain.get("OpenAIApiKey") {
+                apiKey = storedKey
+                logger.debug("已從鑰匙圈載入API金鑰")
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: UIConstants.cornerRadius)
-                    .fill(Color(NSColor.windowBackgroundColor).opacity(0.5))
-                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-            )
-            .padding()
-        }
-    }
-    
-    // MARK: - 功能方法
-    private func resetSettings() {
-        // 重置所有設定
-        isVisualEffectsEnabled = true
-        isParticleEffectsEnabled = true
-        isHotkeyActive = false
-        correctionHotkeyString = ""
-        isClipboardMonitoringEnabled = false
-        fontSize = 14
-        apiKey = ""
-        isApiKeyValid = false
-        
-        logger.debug("重置所有設定")
-    }
-    
-    // 掩碼 API 金鑰
-    private func maskApiKey(_ key: String) -> String {
-        if key.isEmpty {
-            return "尚未設置 API 金鑰"
-        }
-        
-        if key.count <= 8 {
-            return String(repeating: "•", count: key.count)
-        }
-        
-        // 保留前 4 個和後 4 個字符，中間用 • 替代
-        let prefix = key.prefix(4)
-        let suffix = key.suffix(4)
-        let maskLength = key.count - 8
-        let mask = String(repeating: "•", count: maskLength)
-        
-        return "\(prefix)\(mask)\(suffix)"
-    }
-}
-
-// MARK: - API金鑰輸入視圖
-struct ApiKeyInputView: View {
-    @Binding var apiKey: String
-    @State private var inputKey: String = ""
-    @Environment(\.presentationMode) var presentationMode
-    // 暫時移除環境對象引用
-    // @EnvironmentObject private var appStateObserver: AppStateObserver
-    // @Environment(\.appState) private var appState
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("輸入 OpenAI API 金鑰")
-                .font(.headline)
-            
-            Text("API 金鑰用於連接 OpenAI 服務。請從 OpenAI 網站獲取您的 API 金鑰。")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            
-            SecureField("API 金鑰", text: $inputKey)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .frame(width: 300)
-            
-            HStack {
-                Button("取消") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .buttonStyle(LinearButtonStyle(isPrimary: false))
-                
-                Button("儲存") {
-                    saveApiKey()
-                }
-                .buttonStyle(LinearButtonStyle(isPrimary: true))
-                .disabled(inputKey.isEmpty)
-            }
-        }
-        .padding()
-        .frame(width: 350)
-        .onAppear {
-            if !apiKey.isEmpty {
-                inputKey = apiKey
-            }
+        } catch {
+            logger.error("載入 API 金鑰時發生錯誤: \(error.localizedDescription)")
         }
     }
     
     private func saveApiKey() {
-        apiKey = inputKey
+        guard !apiKey.isEmpty else { return }
         
-        // 更新 AppState - 暫時移除
-        // appStateObserver.updateApiKey(apiKey)
+        logger.debug("正在保存API金鑰")
+        isSaving = true
         
-        // 儲存到 Keychain
-        do {
-            let keychain = Keychain(service: "com.yourcompany.TextCorrection")
-            try keychain.set(apiKey, key: "OpenAIApiKey")
+        // 模擬非同步操作，實際應用中可能需要驗證API key
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            do {
+                try keychain.set(apiKey, key: "OpenAIApiKey")
+                
+                // 記錄成功並更新UI狀態，使用安全的狀態更新方法
+                logger.debug("API 金鑰保存成功")
+                appState.safelyUpdate(\.isApiKeyValid, value: true)
+                showSuccessMessage("API 金鑰已保存")
+            } catch {
+                logger.error("保存 API 金鑰時發生錯誤: \(error.localizedDescription)")
+                showErrorMessage("無法保存 API 金鑰: \(error.localizedDescription)")
+            }
             
-            // 自動驗證新的API金鑰 - 暫時移除
-            // Task {
-            //     await appState.validateApiKey(apiKey)
-            // }
-        } catch {
-            print("無法儲存 API 金鑰：\(error)")
+            isSaving = false
         }
-        
-        presentationMode.wrappedValue.dismiss()
     }
-}
-
-// MARK: - 熱鍵自定義視圖
-struct HotkeyCustomizationView: View {
-    // 暫時移除環境對象引用
-    // @EnvironmentObject private var appStateObserver: AppStateObserver
-    // @Environment(\.appState) private var appState
-    @Environment(\.presentationMode) var presentationMode
     
-    @State private var selectedModifiers: [String] = []
-    @State private var selectedKey: String = ""
+    private func showSuccessMessage(_ msg: String) {
+        message = msg
+        isSuccess = true
+        showMessage = true
+    }
     
-    // 添加綁定屬性
-    @Binding var isHotkeyActive: Bool
-    @Binding var hotkeyString: String
+    private func showErrorMessage(_ msg: String) {
+        message = msg
+        isSuccess = false
+        showMessage = true
+    }
     
-    private let availableModifiers = ["⌘", "⌥", "⌃", "⇧"]
-    private let availableKeys = [
-        "space", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-        "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
-    ]
-    
-    var body: some View {
-        VStack(spacing: 20) {
+    // 熱鍵自定義視圖
+    private var hotkeyCustomizationView: some View {
+        VStack(spacing: UIConstants.spacing) {
             Text("自定義熱鍵")
-                .font(.headline)
+                .font(UIConstants.titleFont)
+                .padding(.top, UIConstants.spacing)
             
-            Text("選擇組合鍵及字符作為文本校正的快捷鍵")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            Divider()
             
-            // 修飾鍵選擇
-            VStack(alignment: .leading, spacing: 10) {
-                Text("修飾鍵:")
-                    .font(.subheadline)
+            VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                Text("修飾鍵 (可多選)")
+                    .font(UIConstants.bodyFont.weight(.medium))
                 
                 HStack {
-                    ForEach(availableModifiers, id: \.self) { modifier in
-                        Toggle(isOn: Binding(
-                            get: { selectedModifiers.contains(modifier) },
-                            set: { isOn in
-                                if isOn {
-                                    selectedModifiers.append(modifier)
-                                } else {
-                                    selectedModifiers.removeAll { $0 == modifier }
-                                }
-                            }
-                        )) {
-                            Text(modifier)
-                        }
-                        .toggleStyle(.checkbox)
-                    }
+                    modifierButton("Command", symbol: "⌘", key: "command")
+                    modifierButton("Option", symbol: "⌥", key: "option")
+                    modifierButton("Control", symbol: "⌃", key: "control")
+                    modifierButton("Shift", symbol: "⇧", key: "shift")
                 }
-            }
-            .padding()
-            .background(Color(.windowBackgroundColor).opacity(0.5))
-            .cornerRadius(8)
-            
-            // 按鍵選擇
-            VStack(alignment: .leading, spacing: 10) {
-                Text("按鍵:")
-                    .font(.subheadline)
                 
-                Picker("", selection: $selectedKey) {
-                    Text("未選擇").tag("")
-                    ForEach(availableKeys, id: \.self) { key in
-                        Text(formatKeyDisplay(key)).tag(key)
-                    }
-                }
-                .frame(width: 200)
-            }
-            .padding()
-            .background(Color(.windowBackgroundColor).opacity(0.5))
-            .cornerRadius(8)
-            
-            // 預覽
-            VStack(alignment: .center, spacing: 10) {
-                Text("目前組合:")
-                    .font(.subheadline)
+                Text("主鍵")
+                    .font(UIConstants.bodyFont.weight(.medium))
+                    .padding(.top, UIConstants.spacing / 2)
                 
-                HStack {
-                    ForEach(selectedModifiers, id: \.self) { modifier in
-                        Text(modifier)
-                    }
-                    
-                    if !selectedKey.isEmpty {
-                        Text(formatKeyDisplay(selectedKey))
-                    } else {
-                        Text("未選擇按鍵")
-                            .foregroundColor(.secondary)
-                    }
+                HStack(spacing: UIConstants.spacing / 2) {
+                    characterButton("A", key: "a")
+                    characterButton("B", key: "b")
+                    characterButton("C", key: "c")
+                    characterButton("D", key: "d")
+                    characterButton("T", key: "t")
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(8)
+                
+                HStack(spacing: UIConstants.spacing / 2) {
+                    characterButton("空格", key: "space")
+                    characterButton("↩", key: "return")
+                    characterButton("⌫", key: "delete")
+                    characterButton("↑", key: "up")
+                    characterButton("↓", key: "down")
+                }
+                
+                Text("預覽")
+                    .font(UIConstants.bodyFont.weight(.medium))
+                    .padding(.top, UIConstants.spacing)
+                
+                Text(tempModifiers.isEmpty && tempCharacter.isEmpty ? 
+                     "請選擇修飾鍵和主鍵" : 
+                     "\(formatModifiers(tempModifiers)) + \(formatKey(tempCharacter))")
+                    .font(.system(size: 18, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(UIConstants.secondaryColor.opacity(0.5))
+                    .cornerRadius(UIConstants.cornerRadius)
             }
+            .padding(.horizontal, UIConstants.spacing)
             
-            // 按鈕
+            Spacer()
+            
+            Divider()
+            
             HStack {
-                Button("取消") {
-                    presentationMode.wrappedValue.dismiss()
+                Button(action: {
+                    showHotkeyCustomizationSheet = false
+                }) {
+                    Text("取消")
                 }
                 .buttonStyle(LinearButtonStyle(isPrimary: false))
                 
-                Button("儲存") {
-                    saveHotkey()
-                }
-                .buttonStyle(LinearButtonStyle(isPrimary: true))
-                .disabled(selectedModifiers.isEmpty || selectedKey.isEmpty)
-            }
-            .padding(.top)
-        }
-        .padding()
-        .frame(width: 400)
-        .onAppear {
-            // 從當前設置載入
-            loadCurrentHotkey()
-        }
-    }
-    
-    private func loadCurrentHotkey() {
-        let currentHotkey = hotkeyString
-        
-        if !currentHotkey.isEmpty {
-            // 解析當前熱鍵
-            let components = currentHotkey.components(separatedBy: "+").map { $0.trimmingCharacters(in: .whitespaces) }
-            
-            if components.count >= 2 {
-                // 最後一個組件是按鍵
-                selectedKey = components.last ?? ""
+                Spacer()
                 
-                // 前面的組件是修飾鍵
-                selectedModifiers = components.dropLast().map { modifier -> String in
-                    switch modifier.lowercased() {
-                    case "command", "cmd", "⌘": return "⌘"
-                    case "option", "alt", "⌥": return "⌥"
-                    case "control", "ctrl", "⌃": return "⌃"
-                    case "shift", "⇧": return "⇧"
-                    default: return modifier
+                Button(action: {
+                    saveCustomHotkey()
+                    showHotkeyCustomizationSheet = false
+                }) {
+                    Text("儲存熱鍵")
+                }
+                .buttonStyle(LinearButtonStyle())
+                .disabled(tempModifiers.isEmpty || tempCharacter.isEmpty)
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 500)
+        .onAppear {
+            // 初始化臨時變數
+            tempModifiers = appState.hotKeyModifiers
+            tempCharacter = appState.hotKeyCharacter
+        }
+    }
+    
+    // 修飾鍵按鈕
+    private func modifierButton(_ title: String, symbol: String, key: String) -> some View {
+        Button(action: {
+            toggleModifier(key)
+        }) {
+            VStack(spacing: 4) {
+                Text(symbol)
+                    .font(.system(size: 18, weight: .bold))
+                Text(title)
+                    .font(.system(size: 10))
+            }
+            .frame(width: 60, height: 60)
+            .background(
+                RoundedRectangle(cornerRadius: UIConstants.cornerRadius)
+                    .fill(tempModifiers.contains(key) ? 
+                          UIConstants.primaryColor.opacity(0.2) : 
+                          UIConstants.secondaryColor.opacity(0.5))
+            )
+            .foregroundColor(tempModifiers.contains(key) ? 
+                             UIConstants.primaryColor : 
+                             .primary)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // 字符按鈕
+    private func characterButton(_ title: String, key: String) -> some View {
+        Button(action: {
+            tempCharacter = key
+        }) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .frame(width: 60, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: UIConstants.cornerRadius)
+                        .fill(tempCharacter == key ? 
+                              UIConstants.primaryColor.opacity(0.2) : 
+                              UIConstants.secondaryColor.opacity(0.5))
+                )
+                .foregroundColor(tempCharacter == key ? 
+                                 UIConstants.primaryColor : 
+                                 .primary)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // 切換修飾鍵
+    private func toggleModifier(_ key: String) {
+        if tempModifiers.contains(key) {
+            tempModifiers.removeAll { $0 == key }
+        } else {
+            tempModifiers.append(key)
+        }
+    }
+    
+    // 保存自定義熱鍵
+    private func saveCustomHotkey() {
+        if !tempModifiers.isEmpty && !tempCharacter.isEmpty {
+            appState.updateHotkeySettings(active: true, modifiers: tempModifiers, character: tempCharacter)
+            showSuccessMessage("熱鍵已更新")
+        }
+    }
+    
+    // 格式化修飾鍵
+    private func formatModifiers(_ modifiers: [String]) -> String {
+        var symbols = ""
+        
+        for modifier in modifiers.sorted() {
+            switch modifier.lowercased() {
+            case "command": symbols += "⌘"
+            case "option": symbols += "⌥"
+            case "control": symbols += "⌃"
+            case "shift": symbols += "⇧"
+            default: break
+            }
+        }
+        
+        return symbols
+    }
+    
+    // 格式化按鍵
+    private func formatKey(_ key: String) -> String {
+        switch key.lowercased() {
+        case "space": return "空格"
+        case "return": return "↩"
+        case "delete": return "⌫"
+        case "up": return "↑"
+        case "down": return "↓"
+        default: return key.uppercased()
+        }
+    }
+    
+    // 驗證API金鑰
+    private func validateApiKey() {
+        guard !apiKey.isEmpty else { return }
+        
+        logger.debug("正在驗證API金鑰")
+        isValidating = true
+        
+        // 這裡需要先保存API金鑰，然後進行驗證
+        do {
+            try keychain.set(apiKey, key: "OpenAIApiKey")
+            logger.debug("API 金鑰已保存至鑰匙圈，準備進行驗證")
+        } catch {
+            logger.error("保存 API 金鑰失敗: \(error.localizedDescription)")
+            showErrorMessage("無法保存 API 金鑰: \(error.localizedDescription)")
+            isValidating = false
+            return
+        }
+        
+        // 使用Task異步執行API驗證
+        Task {
+            do {
+                // 使用OpenAIService進行實際API驗證
+                try await openAIService.validateAPIKey(apiKey)
+                
+                // 在主線程更新UI
+                await MainActor.run {
+                    appState.safelyUpdate(\.isApiKeyValid, value: true)
+                    showSuccessMessage("API 金鑰驗證成功")
+                    isValidating = false
+                }
+            } catch let apiError as OpenAIError {
+                await MainActor.run {
+                    appState.safelyUpdate(\.isApiKeyValid, value: false)
+                    var errorMessage = "API 金鑰驗證失敗"
+                    
+                    switch apiError {
+                    case .invalidAPIKey:
+                        errorMessage = "無效的API金鑰"
+                    case .timeout:
+                        errorMessage = "連接超時，請檢查網絡連接"
+                    case .serverError(let message):
+                        errorMessage = "伺服器錯誤: \(message)"
+                    case .clientError(let message):
+                        errorMessage = "客戶端錯誤: \(message)"
+                    case .networkError:
+                        errorMessage = "網絡連接錯誤，請檢查網絡連接"
+                    default:
+                        errorMessage = "驗證失敗: \(apiError.localizedDescription)"
                     }
+                    
+                    showErrorMessage(errorMessage)
+                    isValidating = false
+                }
+            } catch {
+                await MainActor.run {
+                    appState.safelyUpdate(\.isApiKeyValid, value: false)
+                    showErrorMessage("API 金鑰驗證失敗: \(error.localizedDescription)")
+                    isValidating = false
                 }
             }
         }
-    }
-    
-    private func saveHotkey() {
-        // 創建熱鍵字符串
-        let newHotkeyString = selectedModifiers.joined(separator: "+") + "+" + selectedKey
-        
-        // 更新綁定屬性
-        hotkeyString = newHotkeyString
-        isHotkeyActive = true
-        
-        // 關閉視圖
-        presentationMode.wrappedValue.dismiss()
-    }
-    
-    private func formatKeyDisplay(_ key: String) -> String {
-        if key == "space" {
-            return "空格"
-        }
-        return key
     }
 }
 
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView()
-            .environmentObject(AppStateObserver(appState: AppState.shared))
-    }
+#Preview {
+    SettingsView()
+        .environmentObject(AppState.shared)
 }
