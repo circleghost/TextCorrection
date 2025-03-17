@@ -3,329 +3,370 @@ import SwiftUI
 import Combine
 import os.log
 
-/// AppState: 應用程序的狀態管理器
-@MainActor
-class AppState: ObservableObject {
-    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppState")
-    
-    /// 單例實例
+/// 應用程式狀態管理中心
+class AppState: ObservableObject, @unchecked Sendable {
+    // 單例模式，簡化實現
     static let shared = AppState()
     
-    // MARK: - 已發布的屬性
+    // 創建日誌對象，便於調試
+    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AppState")
     
-    // 基本設置
-    @Published var isVisualEffectsEnabled: Bool = true
+    // 序列化隊列，用於確保狀態修改的線程安全
+    private let stateQueue = DispatchQueue(label: "com.yourcompany.TextCorrection.AppState", qos: .userInitiated)
+    
+    // 專用於熱鍵操作的隊列，解決多線程訪問問題
+    private let hotKeyQueue = DispatchQueue(label: "com.yourcompany.TextCorrection.AppState.HotKey", qos: .userInitiated)
+    
+    // 基本設定，使用默認值而不是直接讀取 UserDefaults
+    @Published var isVisualEffectsEnabled: Bool = true 
     @Published var isParticleEffectsEnabled: Bool = true
+    @Published var isAnimationsEnabled: Bool = true
+    @Published var isHighQualityEffectsEnabled: Bool = true
+    
+    // API 狀態
     @Published var isApiKeyValid: Bool = false
     @Published var isProcessing: Bool = false
-    @Published var isOpenAIServiceAvailable: Bool = true
-    @Published var isClipboardMonitoringEnabled: Bool = false
+    @Published var processingProgress: Double = 0.0
     
-    // 文本相關
+    // 文本校正相關
     @Published var originalText: String = ""
     @Published var correctedText: String = ""
-    @Published var changedWordsCount: Int = 0
-    @Published var textProcessingTime: TimeInterval = 0
+    @Published var errorMessage: String = ""
+    
+    // 擴展：UI 狀態
+    @Published var activeScreen: ActiveScreen = .none
+    @Published var isTextWindowOpen: Bool = false
+    @Published var isSettingsWindowOpen: Bool = false
+    @Published var isFloatingButtonVisible: Bool = false
+    
+    // 擴展：文本處理統計
+    @Published var characterCount: Int = 0
     @Published var originalCharacterCount: Int = 0
-    @Published var correctedCharacterCount: Int = 0
+    @Published var wordsChanged: Int = 0
+    @Published var lastProcessingTime: TimeInterval = 0
     
-    // 通知和UI狀態
+    // 擴展：熱鍵狀態
+    @Published var isHotkeyActive: Bool = true
+    @Published var hotKeyModifiers: [String] = ["shift", "control"]
+    @Published var hotKeyCharacter: String = "space"
+    
+    // 擴展：剪貼板監控
+    @Published var isClipboardMonitoringEnabled: Bool = true
+    @Published var lastClipboardChangeTime: Date = Date()
+    
+    // 擴展：通知
     @Published var notifications: [AppNotification] = []
-    @Published var activeScreen: ActiveScreen = .text
-    @Published var statusMessage: String = ""
     
-    // 熱鍵設置
-    @Published var isHotkeyActive: Bool = false
-    @Published var correctionHotkeyString: String = ""
-    
-    // 其他設置
-    @Published var apiKey: String = ""
-    @Published var fontSize: CGFloat = 14
-    
-    // 窗口狀態
-    @Published var windowStates: [String: Bool] = [
-        "text": false,
-        "settings": false,
-        "floatingButton": false
-    ]
-    
-    // MARK: - 公共訪問器（用於異步流）
-    
-    // 提供對isProcessing的異步流訪問
-    var processingPublisher: Published<Bool>.Publisher {
-        $isProcessing
-    }
-    
-    // 提供對windowStates的異步流訪問
-    var windowStatePublisher: Published<[String: Bool]>.Publisher {
-        $windowStates
-    }
-    
-    // MARK: - 窗口狀態更新方法
-    
-    /// 更新窗口狀態
-    func updateWindowState(type: String, isOpen: Bool) {
-        logger.debug("更新窗口狀態: \(type) -> \(isOpen)")
-        windowStates[type] = isOpen
-    }
-    
-    // MARK: - 私有屬性
-    
-    /// 用於取消訂閱的集合
-    private var cancellables = Set<AnyCancellable>()
-    
-    // MARK: - 初始化
-    
+    // 私有初始化器防止外部創建實例
     private init() {
-        logger.info("初始化AppState")
-        
-        // 載入設置
-        Task {
-            await loadSettings()
+        logger.debug("AppState 初始化")
+        loadSettings()
+    }
+    
+    // MARK: - 線程安全的狀態更新方法
+    
+    /// 安全地更新屬性值
+    /// - Parameters:
+    ///   - keyPath: 要更新的屬性路徑
+    ///   - value: 新的值
+    func safelyUpdate<T>(_ keyPath: ReferenceWritableKeyPath<AppState, T>, value: T) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self[keyPath: keyPath] = value
         }
     }
     
-    // MARK: - 設置方法
+    /// 安全地執行閉包操作
+    /// - Parameter action: 要執行的閉包
+    func safelyPerform(_ action: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            action()
+        }
+    }
     
-    /// 更新視覺效果設置
+    // MARK: - 基本設定更新方法
+    
     func updateVisualEffects(enabled: Bool) {
-        isVisualEffectsEnabled = enabled
-        Task {
-            await saveSetting("visualEffects", value: enabled)
-        }
+        safelyUpdate(\.isVisualEffectsEnabled, value: enabled)
+        saveSettings()
     }
     
-    /// 更新粒子效果設置
     func updateParticleEffects(enabled: Bool) {
-        isParticleEffectsEnabled = enabled
-        Task {
-            await saveSetting("particleEffects", value: enabled)
+        safelyUpdate(\.isParticleEffectsEnabled, value: enabled)
+        saveSettings()
+    }
+    
+    func updateAnimations(enabled: Bool) {
+        safelyUpdate(\.isAnimationsEnabled, value: enabled)
+        saveSettings()
+    }
+    
+    func updateHighQualityEffects(enabled: Bool) {
+        safelyUpdate(\.isHighQualityEffectsEnabled, value: enabled)
+        saveSettings()
+    }
+    
+    func updateHotkey(active: Bool) {
+        safelyUpdate(\.isHotkeyActive, value: active)
+        saveSettings()
+    }
+    
+    /// 更新熱鍵設定，包含狀態、修飾鍵和主鍵
+    /// - Parameters:
+    ///   - active: 是否啟用熱鍵
+    ///   - modifiers: 修飾鍵陣列
+    ///   - character: 主鍵字符
+    func updateHotkeySettings(active: Bool, modifiers: [String]? = nil, character: String? = nil) {
+        // 使用專用的熱鍵隊列來確保線程安全
+        hotKeyQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 將更新操作派發到主線程
+            DispatchQueue.main.async {
+                self.isHotkeyActive = active
+                
+                if let modifiers = modifiers {
+                    self.hotKeyModifiers = modifiers
+                }
+                
+                if let character = character {
+                    self.hotKeyCharacter = character
+                }
+                
+                self.saveSettings()
+                
+                // 如果有熱鍵管理器，通知其更新熱鍵設定
+                NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
+                
+                self.logger.debug("熱鍵設定已更新: 狀態=\(active), 修飾鍵=\(self.hotKeyModifiers), 主鍵=\(self.hotKeyCharacter)")
+            }
         }
     }
     
-    /// 更新熱鍵設置
-    func updateHotkeySettings(enabled: Bool) {
-        isHotkeyActive = enabled
-        Task {
-            await saveSetting("hotkeysEnabled", value: enabled)
-        }
-    }
-    
-    /// 更新剪貼板監控設置
     func updateClipboardMonitoring(enabled: Bool) {
-        isClipboardMonitoringEnabled = enabled
-        Task {
-            await saveSetting("clipboardMonitoring", value: enabled)
+        safelyUpdate(\.isClipboardMonitoringEnabled, value: enabled)
+        saveSettings()
+    }
+    
+    /// 從 UserDefaults 載入設定，在主線程上執行
+    func loadSettings() {
+        if Thread.isMainThread {
+            doLoadSettings()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.doLoadSettings()
+            }
         }
     }
     
-    /// 更新API密鑰
-    func updateApiKey(_ key: String) {
-        apiKey = key
-        Task {
-            await saveSetting("apiKey", value: key)
-        }
-    }
-    
-    /// 更新字體大小
-    func updateFontSize(_ size: CGFloat) {
-        fontSize = size
-        Task {
-            await saveSetting("fontSize", value: size)
-        }
-    }
-    
-    /// 更新處理狀態
-    func updateProcessingStatus(_ isProcessing: Bool) {
-        self.isProcessing = isProcessing
-    }
-    
-    /// 更新OpenAI服務可用性
-    func updateOpenAIServiceAvailability(_ isAvailable: Bool) {
-        isOpenAIServiceAvailable = isAvailable
-    }
-    
-    /// 更新狀態訊息
-    func updateStatusMessage(_ message: String) {
-        statusMessage = message
-    }
-    
-    // MARK: - 設置持久化
-    
-    /// 從UserDefaults加載設置
-    @MainActor
-    private func loadSettings() async {
-        logger.info("從UserDefaults加載設置")
-        
+    /// 實際執行設定載入的方法
+    private func doLoadSettings() {
         let defaults = UserDefaults.standard
         
-        isVisualEffectsEnabled = defaults.bool(forKey: "visualEffects")
-        isParticleEffectsEnabled = defaults.bool(forKey: "particleEffects")
-        isHotkeyActive = defaults.bool(forKey: "hotkeysEnabled")
-        correctionHotkeyString = defaults.string(forKey: "correctionHotkey") ?? ""
-        isClipboardMonitoringEnabled = defaults.bool(forKey: "clipboardMonitoring")
-        apiKey = defaults.string(forKey: "apiKey") ?? ""
-        fontSize = defaults.double(forKey: "fontSize") > 0 ? defaults.double(forKey: "fontSize") : 14
+        // 使用安全的方式讀取設定
+        if defaults.object(forKey: "visualEffectsEnabled") != nil {
+            self.isVisualEffectsEnabled = defaults.bool(forKey: "visualEffectsEnabled")
+        }
         
-        // 驗證API密鑰
-        isApiKeyValid = !apiKey.isEmpty
+        if defaults.object(forKey: "particleEffectsEnabled") != nil {
+            self.isParticleEffectsEnabled = defaults.bool(forKey: "particleEffectsEnabled")
+        }
+        
+        if defaults.object(forKey: "animationsEnabled") != nil {
+            self.isAnimationsEnabled = defaults.bool(forKey: "animationsEnabled")
+        }
+        
+        if defaults.object(forKey: "highQualityEffects") != nil {
+            self.isHighQualityEffectsEnabled = defaults.bool(forKey: "highQualityEffects")
+        } else {
+            // 如果沒有儲存設定，根據設備性能設置高品質效果
+            self.isHighQualityEffectsEnabled = !ProcessInfo.processInfo.isLowPowerModeEnabled && ProcessInfo.processInfo.processorCount >= 4
+        }
+        
+        // 載入熱鍵設定
+        if defaults.object(forKey: "isHotkeyActive") != nil {
+            self.isHotkeyActive = defaults.bool(forKey: "isHotkeyActive")
+        }
+        
+        if let modifiers = defaults.stringArray(forKey: "hotKeyModifiers") {
+            self.hotKeyModifiers = modifiers
+        }
+        
+        if let character = defaults.string(forKey: "hotKeyCharacter") {
+            self.hotKeyCharacter = character
+        }
+        
+        // 載入剪貼板監控設定
+        if defaults.object(forKey: "isClipboardMonitoringEnabled") != nil {
+            self.isClipboardMonitoringEnabled = defaults.bool(forKey: "isClipboardMonitoringEnabled")
+        }
+        
+        logger.info("設定已載入")
     }
     
-    /// 保存設置到UserDefaults
-    @MainActor
-    private func saveSetting<T>(_ key: String, value: T) async {
-        logger.info("保存設置: \(key)")
-        
-        let defaults = UserDefaults.standard
-        defaults.set(value, forKey: key)
+    /// 保存單個設定到 UserDefaults
+    func saveSetting<T>(value: T, forKey key: String) {
+        DispatchQueue.main.async {
+            UserDefaults.standard.set(value, forKey: key)
+        }
     }
     
-    /// 重置所有設置
+    /// 保存所有設定到 UserDefaults
+    func saveSettings() {
+        saveSetting(value: isVisualEffectsEnabled, forKey: "visualEffectsEnabled")
+        saveSetting(value: isParticleEffectsEnabled, forKey: "particleEffectsEnabled")
+        saveSetting(value: isAnimationsEnabled, forKey: "animationsEnabled")
+        saveSetting(value: isHighQualityEffectsEnabled, forKey: "highQualityEffects")
+        saveSetting(value: isHotkeyActive, forKey: "isHotkeyActive")
+        saveSetting(value: hotKeyModifiers, forKey: "hotKeyModifiers")
+        saveSetting(value: hotKeyCharacter, forKey: "hotKeyCharacter")
+        saveSetting(value: isClipboardMonitoringEnabled, forKey: "isClipboardMonitoringEnabled")
+        logger.info("已保存所有設定")
+    }
+    
+    /// 重置所有設定
     func resetSettings() {
-        logger.info("重置所有設置")
-        
-        isVisualEffectsEnabled = true
-        isParticleEffectsEnabled = true
-        isHotkeyActive = false
-        correctionHotkeyString = ""
-        isClipboardMonitoringEnabled = false
-        apiKey = ""
-        fontSize = 14
-        
-        // 清除UserDefaults中的設置
-        let defaults = UserDefaults.standard
-        let keys = ["visualEffects", "particleEffects", "hotkeysEnabled", 
-                   "correctionHotkey", "clipboardMonitoring", "apiKey", "fontSize"]
-        
-        for key in keys {
-            defaults.removeObject(forKey: key)
+        safelyPerform { [weak self] in
+            guard let self = self else { return }
+            self.isVisualEffectsEnabled = true
+            self.isParticleEffectsEnabled = true
+            self.isAnimationsEnabled = true
+            self.isHighQualityEffectsEnabled = true
+            self.isHotkeyActive = true
+            self.isClipboardMonitoringEnabled = true
+            self.saveSettings()
+        }
+        logger.debug("已重置所有設定")
+    }
+    
+    /// 重置文本校正狀態
+    func resetCorrectionState() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            logger.debug("重置文本校正狀態")
+            
+            self.originalText = ""
+            self.correctedText = ""
+            self.errorMessage = ""
+            self.processingProgress = 0.0
+            self.isProcessing = false
+            self.characterCount = 0
+            self.originalCharacterCount = 0
+            self.wordsChanged = 0
+            self.lastProcessingTime = 0
         }
     }
     
-    // MARK: - 文本處理方法
-    
-    /// 更新文本統計信息
-    func updateTextStats(originalCharCount: Int, correctedCharCount: Int, processingTime: TimeInterval) {
-        logger.info("更新文本統計: 原始字符數: \(originalCharCount), 修正字符數: \(correctedCharCount), 處理時間: \(processingTime)秒")
-        
-        originalCharacterCount = originalCharCount
-        correctedCharacterCount = correctedCharCount
-        textProcessingTime = processingTime
+    /// 更新文本處理統計
+    func updateTextStats(original: String, corrected: String, processingTime: TimeInterval, wordsChanged: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.originalCharacterCount = original.count
+            self.characterCount = corrected.count
+            self.lastProcessingTime = processingTime
+            self.wordsChanged = wordsChanged
+            
+            logger.debug("文本統計已更新: \(self.characterCount)字符, \(self.wordsChanged)個修改, 處理時間 \(processingTime)秒")
+        }
     }
-    
-    // MARK: - 通知方法
     
     /// 添加通知
-    func addNotification(type: NotificationType, message: String) {
-        logger.info("添加通知: \(type.rawValue) - \(message)")
-        
-        let notification = AppNotification(
-            id: UUID(),
-            type: type,
-            message: message,
-            timestamp: Date()
-        )
-        
-        // 限制通知數量，保留最新的10條
-        if notifications.count >= 10 {
-            notifications.removeFirst()
+    func addNotification(title: String, message: String, type: NotificationType = .info) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            let notification = AppNotification(
+                id: UUID().uuidString,
+                title: title,
+                message: message,
+                type: type,
+                timestamp: Date()
+            )
+            
+            self.notifications.append(notification)
+            
+            // 最多保留最近的10條通知
+            if self.notifications.count > 10 {
+                self.notifications.removeFirst()
+            }
+            
+            logger.debug("添加了新通知: \(title)")
         }
-        
-        notifications.append(notification)
     }
     
-    /// 移除通知
-    func removeNotification(id: UUID) {
-        logger.info("移除通知: \(id)")
-        
-        notifications.removeAll { $0.id == id }
+    /// 刪除通知
+    func removeNotification(id: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.notifications.removeAll { $0.id == id }
+            logger.debug("刪除了通知 ID: \(id)")
+        }
     }
     
-    /// 清除所有通知
+    /// 清空所有通知
     func clearAllNotifications() {
-        logger.info("清除所有通知")
-        
-        notifications.removeAll()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.notifications.removeAll()
+            logger.debug("清空了所有通知")
+        }
     }
     
-    // MARK: - 屏幕導航
-    
-    /// 設置活動屏幕
-    func setActiveScreen(_ screen: ActiveScreen) {
-        logger.debug("設置活動屏幕: \(screen.rawValue)")
-        activeScreen = screen
-    }
-    
-    /// 更新文本信息
-    func updateTextInfo(originalText: String, correctedText: String) {
-        logger.info("更新文本信息")
-        
-        self.originalText = originalText
-        self.correctedText = correctedText
-        
-        // 計算更改的單詞數
-        let originalWords = originalText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        let correctedWords = correctedText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        
-        changedWordsCount = abs(originalWords.count - correctedWords.count)
-        
-        // 添加通知
-        addNotification(type: .info, message: "文本已更新，更改了 \(changedWordsCount) 個單詞")
-    }
-    
-    // MARK: - 調試方法
-    
-    /// 打印當前狀態用於調試
+    /// 打印當前狀態（用於調試）
     func printDebugState() {
-        logger.info("""
-        === AppState 調試信息 ===
+        logger.debug("""
+        ===== AppState 狀態 =====
         視覺效果: \(self.isVisualEffectsEnabled)
         粒子效果: \(self.isParticleEffectsEnabled)
-        API密鑰有效: \(self.isApiKeyValid)
-        處理中: \(self.isProcessing)
-        OpenAI服務可用: \(self.isOpenAIServiceAvailable)
+        動畫: \(self.isAnimationsEnabled)
+        高品質效果: \(self.isHighQualityEffectsEnabled)
+        API有效: \(self.isApiKeyValid)
+        處理中: \(self.isProcessing) (\(self.processingProgress))
+        文本窗口: \(self.isTextWindowOpen)
+        設置窗口: \(self.isSettingsWindowOpen)
+        浮動按鈕: \(self.isFloatingButtonVisible)
+        熱鍵狀態: \(self.isHotkeyActive)
         剪貼板監控: \(self.isClipboardMonitoringEnabled)
-        熱鍵啟用: \(self.isHotkeyActive)
-        熱鍵: \(self.correctionHotkeyString)
-        字體大小: \(self.fontSize)
-        原始文本長度: \(self.originalText.count)
-        修正文本長度: \(self.correctedText.count)
-        更改單詞數: \(self.changedWordsCount)
-        處理時間: \(self.textProcessingTime)秒
         通知數量: \(self.notifications.count)
-        活動螢幕: \(self.activeScreen.rawValue)
-        窗口狀態: \(self.windowStates)
-        === AppState 調試信息結束 ===
+        ===========================
         """)
     }
     
-    /// 重置狀態
-    func resetState() {
-        logger.info("重置狀態")
+    // 當文本修正完成時調用此方法
+    func updateTextInfo(original: String, corrected: String) {
+        self.originalText = original
+        self.correctedText = corrected
+        self.originalCharacterCount = original.count
+        self.characterCount = corrected.count
         
-        originalText = ""
-        correctedText = ""
-        changedWordsCount = 0
-        textProcessingTime = 0
-        originalCharacterCount = 0
-        correctedCharacterCount = 0
-        notifications.removeAll()
-        statusMessage = ""
-        isProcessing = false
+        // 計算差異
+        self.wordsChanged = TextProcessing.calculateChangedWords(
+            original: original,
+            rewritten: corrected
+        )
+        
+        // 發送通知
+        logger.debug("文本已更新：原始字符數 \(self.originalCharacterCount)，校正後字符數 \(self.characterCount)，變更詞數 \(self.wordsChanged)")
+        self.objectWillChange.send()
     }
 }
 
-// MARK: - 支持類型
+// MARK: - 輔助類型
 
-/// 活動屏幕枚舉
-enum ActiveScreen: String, CaseIterable {
-    case text = "text"
-    case settings = "settings"
-    case about = "about"
+/// 活動螢幕枚舉
+enum ActiveScreen {
+    case none
+    case textCorrection
+    case settings
+    case about
 }
 
 /// 通知類型枚舉
-enum NotificationType: String {
+enum NotificationType {
     case info
     case success
     case warning
@@ -333,29 +374,10 @@ enum NotificationType: String {
 }
 
 /// 應用通知結構
-struct AppNotification: Identifiable, Equatable {
-    let id: UUID
-    let type: NotificationType
+struct AppNotification: Identifiable {
+    let id: String
+    let title: String
     let message: String
+    let type: NotificationType
     let timestamp: Date
-    
-    static func == (lhs: AppNotification, rhs: AppNotification) -> Bool {
-        return lhs.id == rhs.id
-    }
-}
-
-// 定義環境鍵
-struct AppStateKey: EnvironmentKey {
-    @MainActor
-    static var defaultValue: AppState {
-        AppState.shared
-    }
-}
-
-// 擴展EnvironmentValues以包含AppState
-extension EnvironmentValues {
-    var appState: AppState {
-        get { self[AppStateKey.self] }
-        set { self[AppStateKey.self] = newValue }
-    }
 } 
