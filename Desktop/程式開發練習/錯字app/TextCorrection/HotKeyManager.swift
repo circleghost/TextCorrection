@@ -112,8 +112,8 @@ class HotKeyManager: @unchecked Sendable {
         // 移除全局監聽器
         removeGlobalMonitor()
         
-        // 取消 Carbon 熱鍵註冊
-        unregisterCarbonHotKey()
+        // 使用 unregisterHotKey 代替 unregisterCarbonHotKey
+        unregisterHotKey()
         
         // 移除通知中心觀察者
         NotificationCenter.default.removeObserver(self)
@@ -202,21 +202,41 @@ class HotKeyManager: @unchecked Sendable {
         // 設置熱鍵
         logger.info("註冊熱鍵: \(keyModifiers.rawValue) + \(keyString)")
         
-        if let keyEquivalent = KeyEquivalent(keyString) {
-            hotKey = HotKey(keyEquivalent: keyEquivalent, modifiers: keyModifiers, handler: { [weak self] _ in
+        if keyString.count == 1, let firstChar = keyString.first {
+            let keyEquivalent = KeyEquivalent(firstChar)
+            hotKey = HotKey(keyEquivalent: keyEquivalent, modifiers: keyModifiers)
+            hotKey?.keyDownHandler = { [weak self] in
                 self?.handleHotKeyPressed()
-            })
+            }
             
             if hotKey != nil {
                 logger.info("熱鍵註冊成功")
             } else {
                 logger.error("熱鍵註冊失敗")
                 
-                // 嘗試其他方法註冊
-                registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
+                // 嘗試使用特殊按鍵處理
+                if keyString.lowercased() == "space" {
+                    let spaceKeyEquivalent = KeyEquivalent(" ")
+                    hotKey = HotKey(keyEquivalent: spaceKeyEquivalent, modifiers: keyModifiers)
+                    hotKey?.keyDownHandler = { [weak self] in
+                        self?.handleHotKeyPressed()
+                    }
+                    logger.info("空格鍵熱鍵註冊成功")
+                } else {
+                    // 嘗試其他方法註冊
+                    registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
+                }
             }
+        } else if keyString.lowercased() == "space" {
+            // 直接使用空格字符
+            let spaceKeyEquivalent = KeyEquivalent(" ")
+            hotKey = HotKey(keyEquivalent: spaceKeyEquivalent, modifiers: keyModifiers)
+            hotKey?.keyDownHandler = { [weak self] in
+                self?.handleHotKeyPressed()
+            }
+            logger.info("空格鍵熱鍵註冊成功")
         } else {
-            logger.error("無法創建KeyEquivalent，熱鍵註冊失敗")
+            logger.error("無法創建KeyEquivalent，熱鍵註冊失敗: 字串長度不為1或無效字符")
             
             // 嘗試其他方法註冊
             registerCarbonHotKey(modifiers: keyModifiers, key: keyString)
