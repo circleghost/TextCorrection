@@ -227,11 +227,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pasteboardManager.startMonitoring()
             
             // 熱鍵管理器最後初始化，避免其他管理器還未就緒時就接收熱鍵事件
-            hotKeyManager = HotKeyManager(appDelegate: self)
-            hotKeyManager.setupHotKey()
-            // 確保同時註冊備用熱鍵，增加成功率
-            hotKeyManager.registerCarbonHotKey()
-            hotKeyManager.registerGlobalShortcut()
+            initializeHotKeyManager()
+            
             logger.info("已設置主要和備用熱鍵註冊")
             
             logger.info("所有管理器已初始化")
@@ -1070,6 +1067,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 取消所有訂閱
         cancellables.removeAll()
+    }
+
+    func initializeHotKeyManager() {
+        // 確保在主線程上初始化熱鍵管理器
+        if Thread.isMainThread {
+            logger.debug("創建和設置熱鍵管理器")
+            hotKeyManager = HotKeyManager(appDelegate: self)
+            logger.debug("熱鍵管理器初始化完成")
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.logger.debug("在主線程上創建和設置熱鍵管理器")
+                self.hotKeyManager = HotKeyManager(appDelegate: self)
+                self.logger.debug("熱鍵管理器初始化完成")
+            }
+        }
     }
 }
 

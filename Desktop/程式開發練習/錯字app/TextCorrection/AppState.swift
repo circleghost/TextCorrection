@@ -307,6 +307,12 @@ class AppState: ObservableObject, @unchecked Sendable {
         if defaults.object(forKey: "isHotkeyActive") == nil {
             saveSettings()
             logger.info("首次執行，保存默認設定到 UserDefaults")
+            
+            // 首次執行設置後主動發送設定變更通知
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: NSNotification.Name("HotKeySettingsChanged"), object: nil)
+                self.logger.info("首次執行，發送熱鍵設定變更通知")
+            }
         }
         
         logger.info("設定已載入，當前熱鍵狀態: \(self.isHotkeyActive), 修飾鍵: \(self.hotKeyModifiers), 主鍵: \(self.hotKeyCharacter)")

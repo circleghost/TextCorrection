@@ -50,8 +50,8 @@ class HotKeyManager: @unchecked Sendable {
         // 立即嘗試設置熱鍵(如果已啟用)
         if AppState.shared.isHotkeyActive {
             logger.info("🔄 應用啟動時熱鍵功能已開啟，立即設置熱鍵")
-            let modifiers = AppState.shared.hotKeyModifiers
-            let character = AppState.shared.hotKeyCharacter
+            // 直接使用 setupHotKey 方法設置熱鍵
+            setupHotKey()
             
             // 在應用啟動時強制設置熱鍵
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -153,6 +153,21 @@ class HotKeyManager: @unchecked Sendable {
         // 添加調試日誌
         logger.info("嘗試設置熱鍵: 修飾鍵=\(modifiers), 主鍵=\(keyCharacter)")
         
+        // 檢查修飾鍵是否為空
+        if modifiers.isEmpty {
+            logger.warning("修飾鍵為空，無法設置熱鍵")
+            // 使用默認修飾鍵
+            AppState.shared.updateHotkeySettings(active: isActive, modifiers: ["shift", "control"])
+            return
+        }
+        
+        // 檢查主鍵是否為空
+        if keyCharacter.isEmpty {
+            logger.warning("主鍵為空，無法設置熱鍵")
+            AppState.shared.updateHotkeySettings(active: isActive, character: "space")
+            return
+        }
+        
         // 轉換修飾鍵
         var modifierFlags: NSEvent.ModifierFlags = []
         for modifier in modifiers {
@@ -173,6 +188,12 @@ class HotKeyManager: @unchecked Sendable {
                 logger.warning("未知修飾鍵: \(modifier)")
                 break
             }
+        }
+        
+        // 檢查修飾鍵標誌是否為空
+        if modifierFlags.isEmpty {
+            logger.warning("修飾鍵轉換後為空，使用默認設置")
+            modifierFlags = [.control, .shift]
         }
         
         logger.info("轉換後的修飾鍵標誌: \(modifierFlags.rawValue)")
@@ -204,11 +225,15 @@ class HotKeyManager: @unchecked Sendable {
                     logger.debug("成功創建按鍵: \(unwrappedKey.description)")
                 } else {
                     logger.error("無法創建熱鍵: \(keyCharacter)，ASCII值: \(keyCode)")
-                    return
+                    // 嘗試使用默認按鍵
+                    key = .space
+                    logger.info("使用默認按鍵: space")
                 }
             } else {
                 logger.error("無法識別熱鍵字符: \(keyCharacter)")
-                return
+                // 嘗試使用默認按鍵
+                key = .space
+                logger.info("使用默認按鍵: space")
             }
         }
         
