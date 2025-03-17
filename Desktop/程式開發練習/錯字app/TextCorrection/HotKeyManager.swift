@@ -227,10 +227,10 @@ class HotKeyManager: @unchecked Sendable {
     private func unregisterHotKey() {
         logger.info("注銷現有熱鍵")
         
-        // 注銷Magnet熱鍵
+        // 注銷HotKey熱鍵
         if hotKey != nil {
             hotKey = nil
-            logger.debug("Magnet熱鍵已注銷")
+            logger.debug("HotKey熱鍵已注銷")
         }
         
         // 注銷Carbon熱鍵
@@ -463,6 +463,13 @@ class HotKeyManager: @unchecked Sendable {
     // 模擬按下 Command+C 複製當前選中文字的方法
     private func simulateCopyKeyPress() {
         logger.info("模擬 Command+C 複製操作")
+        
+        // 注銷熱鍵
+        if let key = hotKey {
+            key.isPaused = true
+            hotKey = nil
+            logger.debug("熱鍵已注銷")
+        }
         
         // 創建一個包含 Command+C 的事件
         let keyDownEvent = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(8), keyDown: true)
