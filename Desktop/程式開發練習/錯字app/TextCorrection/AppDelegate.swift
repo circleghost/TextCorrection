@@ -94,43 +94,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 使用 do-catch 處理初始化過程中可能的錯誤
-        do {
-            logger.info("應用程式啟動")
-            
-            // 檢查輔助功能權限
-            checkAccessibilityPermissions()
-            
-            // 設置AppKitBridge的AppDelegate引用
-            AppKitBridge.shared.setAppDelegate(self)
-            
-            // 訂閱AppState的變更
-            setupStateSubscriptions()
-            
-            // 初始化各個管理器 - 使用 try 來處理可能的初始化錯誤
-            try initializeManagersSafely()
-            
-            // 初始化UI元素
-            setupUI()
-            
-            // 檢查API Key是否有效
-            validateApiKey()
-            
-            // 打印初始狀態（用於調試）
-            AppState.shared.printDebugState()
-            AppKitBridge.shared.printDebugState()
-        } catch {
-            // 處理啟動過程中的任何錯誤
-            logger.error("應用程式啟動失敗: \(error.localizedDescription)")
-            
-            // 顯示錯誤警告給用戶
-            let alert = NSAlert()
-            alert.messageText = "應用程式啟動失敗"
-            alert.informativeText = "初始化過程中發生錯誤: \(error.localizedDescription)"
-            alert.alertStyle = .critical
-            alert.addButton(withTitle: "確定")
-            alert.runModal()
-        }
+        logger.info("應用程式啟動")
+        
+        // 設置應用程式代理
+        AppKitBridge.shared.appDelegate = self
+        
+        // 檢查輔助功能權限
+        checkAccessibilityPermissions()
+        
+        // 設置狀態訂閱
+        setupStateSubscriptions()
+        
+        // 初始化各個管理器
+        initializeManagersSafely()
+        
+        // 初始化UI元素
+        initializeUI()
+        
+        // 檢查API Key是否有效
+        validateApiKey()
+        
+        // 打印初始狀態（用於調試）
+        AppState.shared.printDebugState()
+        AppKitBridge.shared.printDebugState()
     }
     
     /// 檢查輔助功能權限
@@ -207,31 +193,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     /// 安全地初始化所有管理器 - 捕獲任何可能的錯誤
-    private func initializeManagersSafely() throws {
+    private func initializeManagersSafely() {
         logger.info("開始初始化所有管理器")
         
         // 使用 autoreleasepool 確保內存及時釋放
-        try autoreleasepool {
+        autoreleasepool {
             // 初始化服務和管理器
-            do {
-                openAIService = try OpenAIService()
-                logger.info("OpenAI服務初始化完成")
-            } catch {
-                logger.error("初始化 OpenAI 服務失敗: \(error.localizedDescription)")
-                throw error
-            }
+            openAIService = OpenAIService()
+            logger.info("OpenAI服務初始化完成")
             
-            textWindowManager = TextWindowManager()
+            textWindowManager = TextWindowManager(appDelegate: self)
             logger.info("文本窗口管理器初始化完成")
             
-            statusItemManager = StatusItemManager()
+            statusItemManager = StatusItemManager(appDelegate: self)
             logger.info("狀態欄管理器初始化完成")
             
             // 初始化熱鍵管理器
             initializeHotKeyManager(appDelegate: self)
             
             // 初始化剪貼板監視器
-            pasteboardManager = PasteboardManager()
+            pasteboardManager = PasteboardManager(appDelegate: self)
             logger.info("剪貼板監視器初始化完成")
             
             // 啟動剪貼板監視（如果啟用）
@@ -245,7 +226,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // 初始化UI元素
-    private func setupUI() {
+    private func initializeUI() {
         // 臨時空實現
         logger.info("初始化UI元素")
     }
