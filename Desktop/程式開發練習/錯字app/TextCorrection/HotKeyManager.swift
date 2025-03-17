@@ -66,36 +66,34 @@ class HotKeyManager: @unchecked Sendable {
     
     // 設置與AppState的訂閱關係
     private func setupSubscriptions() {
-        // 監聽熱鍵狀態變化
-        AppState.shared.$isHotkeyActive
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isActive in
-                guard let self = self else { return }
-                
-                if isActive && self.hotKey == nil {
+        // 移除對 @Published 屬性的直接訂閱
+        // 改為使用 NotificationCenter 觀察變更通知
+        
+        // 監聽熱鍵設定變更通知已在 init 方法中設置，不需要重複
+        logger.info("設置熱鍵訂閱關係完成")
+        
+        // 使用計時器定期檢查設定的變化，以防萬一
+        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            // 檢查當前熱鍵狀態
+            let isActive = AppState.shared.isHotkeyActive
+            
+            // 如果應該啟用但熱鍵為空，則設置熱鍵
+            if isActive && self.hotKey == nil {
+                DispatchQueue.main.async {
+                    self.logger.debug("計時器檢測到熱鍵應啟用但未設置，重新設置熱鍵")
                     self.setupHotKey()
-                } else if !isActive && self.hotKey != nil {
+                }
+            }
+            // 如果應該禁用但熱鍵不為空，則禁用熱鍵
+            else if !isActive && self.hotKey != nil {
+                DispatchQueue.main.async {
+                    self.logger.debug("計時器檢測到熱鍵應禁用但仍在設置，禁用熱鍵")
                     self.disableHotKey()
                 }
             }
-            .store(in: &cancellables)
-        
-        // 監聽熱鍵設定變化
-        Publishers.CombineLatest3(
-            AppState.shared.$hotKeyModifiers,
-            AppState.shared.$hotKeyCharacter,
-            AppState.shared.$isHotkeyActive
-        )
-        .receive(on: DispatchQueue.main)
-        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-        .sink { [weak self] (modifiers, character, isActive) in
-            guard let self = self, isActive else { return }
-            
-            // 熱鍵設定有變更，重新設置
-            self.logger.debug("熱鍵設定已變更，重新設置")
-            self.setupHotKey()
         }
-        .store(in: &cancellables)
     }
     
     // 清理所有資源，確保正確釋放

@@ -857,7 +857,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("已複製校正文本到剪貼板")
     }
     
-    // 添加新方法，專門用於熱鍵觸發的文本處理
+    // 直接處理從熱鍵觸發的選中文本
     @MainActor
     func directlyProcessHotkeySelection(_ text: String) {
         // 確保在主線程上執行，因為這會更新UI
@@ -878,7 +878,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         lastSelectedText = text
         
         // 顯示文本窗口
-        showTextCorrectionWindow(withText: text)
+        showSwiftUITextWindow(text: text)
         
         // 立即開始處理選中的文本
         rewriteText()
