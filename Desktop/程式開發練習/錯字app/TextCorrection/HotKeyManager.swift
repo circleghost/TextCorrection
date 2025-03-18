@@ -351,11 +351,43 @@ class HotKeyManager: @unchecked Sendable {
     private func handleHotKeyPressed() {
         logger.info("熱鍵已觸發")
         
-        DispatchQueue.main.async {
-            // 發送通知，通知應用執行文本處理操作
-            NotificationCenter.default.post(name: NSNotification.Name("ProcessTextFromHotKey"), object: nil)
-            NSSound.beep() // 播放提示音
+        // 檢查輔助功能權限
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        
+        if !accessEnabled {
+            logger.warning("熱鍵觸發但缺少輔助功能權限")
+            // 在主線程上顯示警告
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                // 嘗試獲取 AppDelegate 參考
+                if let appDelegate = self.appDelegate {
+                    self.logger.info("熱鍵觸發時檢測到權限問題，請求檢查輔助功能權限")
+                    appDelegate.checkAccessibilityPermissions()
+                } else {
+                    // 如果無法獲取 AppDelegate，直接顯示提示給用戶
+                    let alert = NSAlert()
+                    alert.messageText = "需要輔助功能權限"
+                    alert.informativeText = "熱鍵功能需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。授權後請重啟應用。"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "打開系統設定")
+                    alert.addButton(withTitle: "取消")
+                    
+                    let response = alert.runModal()
+                    if response == .alertFirstButtonReturn {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                    }
+                }
+                
+                // 禁用熱鍵功能
+                AppState.shared.updateHotkeySettings(active: false)
+            }
+            return
         }
+        
+        // 直接調用 hotKeyTriggered，保持一致的行為
+        hotKeyTriggered()
     }
     
     /// 提示用戶授予輔助功能權限
@@ -627,41 +659,6 @@ class HotKeyManager: @unchecked Sendable {
     // 熱鍵觸發時的處理函數
     private func hotKeyTriggered() {
         logger.debug("熱鍵被觸發")
-        
-        // 檢查輔助功能權限
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
-        let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
-        
-        if !accessEnabled {
-            logger.warning("熱鍵觸發但缺少輔助功能權限")
-            // 在主線程上顯示警告
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                // 嘗試獲取 AppDelegate 參考
-                if let appDelegate = self.appDelegate {
-                    self.logger.info("熱鍵觸發時檢測到權限問題，請求檢查輔助功能權限")
-                    appDelegate.checkAccessibilityPermissions()
-                } else {
-                    // 如果無法獲取 AppDelegate，直接顯示提示給用戶
-                    let alert = NSAlert()
-                    alert.messageText = "需要輔助功能權限"
-                    alert.informativeText = "熱鍵功能需要輔助功能權限。請前往「系統設定」→「隱私與安全性」→「輔助使用」允許本應用程式。授權後請重啟應用。"
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "打開系統設定")
-                    alert.addButton(withTitle: "取消")
-                    
-                    let response = alert.runModal()
-                    if response == .alertFirstButtonReturn {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                    }
-                }
-                
-                // 禁用熱鍵功能
-                AppState.shared.updateHotkeySettings(active: false)
-            }
-            return
-        }
         
         // 通知PasteboardManager這是熱鍵觸發
         NotificationCenter.default.post(name: NSNotification.Name("HotkeyTriggered"), object: nil)
