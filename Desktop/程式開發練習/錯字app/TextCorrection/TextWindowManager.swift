@@ -9,6 +9,9 @@ class TextWindowManager: @unchecked Sendable {
     // 將靜態屬性移到類別級別
     private static var lastResizeTime: TimeInterval = 0
     
+    // 添加控制窗口調整的屬性
+    private var shouldAdjustWindow = true
+    
     // 在類中添加新的屬性用於跟踪API完成狀態
     private var isAPICompleted = false
     private var completeResult: (originalText: String, newText: String)? = nil
@@ -741,6 +744,20 @@ class TextWindowManager: @unchecked Sendable {
     
     // 修改updateTextViewWithDiff方法，增加處理API完成邏輯
     func updateTextViewWithDiff(originalText: String, newText: String, textView: NSTextView) {
+        // 確保在主線程上執行
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateTextViewWithDiff(originalText: originalText, newText: newText, textView: textView)
+            }
+            return
+        }
+        
+        // 安全檢查
+        guard let _ = textView.window else {
+            print("錯誤: textView的window為nil，無法更新")
+            return
+        }
+        
         // 如果API已完成並儲存了完整結果，使用完整結果而非流式顯示
         if let completedResult = completeResult {
             // 使用完整結果進行渲染
@@ -824,6 +841,20 @@ class TextWindowManager: @unchecked Sendable {
     
     // 新方法：直接渲染最終比較結果
     private func renderFinalComparisonResult(originalText: String, newText: String, textView: NSTextView) {
+        // 確保在主線程上執行
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.renderFinalComparisonResult(originalText: originalText, newText: newText, textView: textView)
+            }
+            return
+        }
+        
+        // 安全檢查
+        guard let _ = textView.window else {
+            print("錯誤: renderFinalComparisonResult中textView的window為nil")
+            return
+        }
+        
         print("直接渲染最終比較結果，跳過流式顯示")
         
         // 創建富文本結果

@@ -166,11 +166,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         AppState.shared.$isSettingsWindowOpen
             .sink { [weak self] isOpen in
-                self?.logger.debug("設置窗口狀態變更: \(isOpen)")
-                if !isOpen && self?.settingsWindow != nil {
+                guard let self = self else { return }
+                self.logger.debug("設定視窗狀態變更: \(isOpen)")
+                
+                if isOpen && self.settingsWindow == nil {
                     DispatchQueue.main.async {
-                        self?.settingsWindow?.close()
-                        self?.settingsWindow = nil
+                        self.createSettingsWindow()
+                    }
+                }
+                if !isOpen && self.settingsWindow != nil {
+                    DispatchQueue.main.async {
+                        self.logger.debug("關閉設定視窗")
+                        self.settingsWindow?.close()
+                        self.settingsWindow = nil
                     }
                 }
             }
@@ -363,9 +371,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                 // 更新窗口大小以適應內容
                                 windowManager.resizeWindowToFitContent()
                             }
-            } else {
+                        } else {
                             // 否則僅顯示流式文本，但避免頻繁更新導致抖動
-        DispatchQueue.main.async {
+                            DispatchQueue.main.async {
                                 // 保存目前的滾動位置
                                 let wasAtBottom = (textView.visibleRect.maxY >= textView.bounds.maxY)
                                 
@@ -380,11 +388,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                                 // 更新窗口大小以適應內容
                                 if let windowManager = textWindowManager {
                                     windowManager.resizeWindowToFitContent()
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        }
-    }
 
                 // 完成處理
                 let processingTime = Date().timeIntervalSince(startTime)
@@ -401,7 +409,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 
                 // 在主線程執行最終 UI 更新
-        await MainActor.run {
+                await MainActor.run {
                     // 先存儲 weakSelf 的本地副本到一個不可變變數，避免多次存取共享狀態
                     let localSelf = weakSelf
                     
@@ -796,6 +804,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // 添加 createSettingsWindow 方法
+    @MainActor
+    private func createSettingsWindow() {
+        logger.debug("創建設定視窗")
+        
+        // 創建 SettingsView 並注入 AppState 環境對象
+        let settingsView = SettingsView()
+            .environmentObject(AppState.shared)
+        
+        let hostingController = NSHostingController(rootView: settingsView)
+        
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        newWindow.title = "設定"
+        newWindow.center()
+        newWindow.isReleasedWhenClosed = false
+        newWindow.delegate = self
+        
+        newWindow.contentViewController = hostingController
+        newWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // 更新狀態
+        AppState.shared.isSettingsWindowOpen = true
+        AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
+        
+        // 設置窗口引用
+        self.settingsWindow = newWindow
+    }
+
     // 顯示設定視窗
     @objc func showSettings() {
         // 使用 NSHostingController 顯示 SwiftUI 設定視圖
@@ -803,35 +845,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 確保所有 UI 操作在主線程執行
         Task { @MainActor in
-            do {
-                // 創建 SettingsView 並注入 AppState 環境對象
-                let settingsView = SettingsView()
-                    .environmentObject(AppState.shared)
-                
-                let hostingController = NSHostingController(rootView: settingsView)
-                
-                if settingsWindow == nil {
-                    settingsWindow = NSWindow(
-                        contentRect: NSRect(x: 0, y: 0, width: 350, height: 430),
-                        styleMask: [.titled, .closable, .miniaturizable],
-                        backing: .buffered,
-                        defer: false
-                    )
-                    settingsWindow?.title = "設定"
-                    settingsWindow?.center()
-                    settingsWindow?.isReleasedWhenClosed = false
-                    settingsWindow?.delegate = self
-                }
-                
-                settingsWindow?.contentViewController = hostingController
-                settingsWindow?.makeKeyAndOrderFront(nil)
+            // 檢查窗口是否已存在
+            if self.settingsWindow == nil {
+                // 使用新的方法創建窗口
+                self.createSettingsWindow()
+            } else {
+                // 如果窗口已存在，只需要顯示它
+                self.settingsWindow?.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
                 
-                // 更新狀態
+                // 確保狀態一致
                 AppState.shared.isSettingsWindowOpen = true
                 AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
-            } catch {
-                logger.error("顯示設定視窗時發生錯誤: \(error.localizedDescription)")
             }
         }
     }
@@ -1073,10 +1098,12 @@ extension AppDelegate: NSWindowDelegate {
                 AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
                 self.textWindow = nil
             } else if window == self.settingsWindow {
-                self.logger.debug("設置窗口將要關閉")
+                self.logger.debug("設定視窗將要關閉")
+                // 先更新狀態
                 AppState.shared.isSettingsWindowOpen = false
                 AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: false)
-                // 不設為nil，因為設置窗口可以重複使用
+                // 重要：設置為 nil 以避免同步訪問問題
+                self.settingsWindow = nil
             } else if window == self.swiftUIWindow {
                 self.logger.debug("SwiftUI 文本窗口將要關閉")
                 AppState.shared.isTextWindowOpen = false
