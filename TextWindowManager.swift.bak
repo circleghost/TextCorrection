@@ -1,0 +1,337 @@
+import Cocoa
+import os.log
+import SwiftUI
+
+// 將整個類標記為 @MainActor，因為它主要處理 UI 元素
+@MainActor
+class TextWindowManager: @unchecked Sendable {
+    private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+    weak var appDelegate: AppDelegate?
+    
+    // 添加一個屬性來跟踪自己創建的文本窗口
+    private var textWindow: NSWindow?
+    
+    // 將靜態屬性移到類別級別
+    private static var lastResizeTime: TimeInterval = 0
+    
+    // 在類中添加新的屬性用於跟踪API完成狀態
+    private var isAPICompleted = false
+    private var completeResult: (originalText: String, newText: String)? = nil
+    
+    // 添加粉圓體字體輔助方法
+    private func getPungyuFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        // 嘗試多種可能的粉圓體字體名稱
+        let fontNames = ["jf-openhuninn", "JF Open Huninn", "粉圓體", "jf粉圓體", "JF粉圓體"]
+        
+        for name in fontNames {
+            if let font = NSFont(name: name, size: size) {
+                return font
+            }
+        }
+        
+        // 如果找不到粉圓體，回退到系統字體
+        return NSFont.systemFont(ofSize: size, weight: weight)
+    }
+    
+    init(appDelegate: AppDelegate) {
+        self.appDelegate = appDelegate
+    }
+    
+    func showTextWindow(text: String) {
+        guard let appDelegate = appDelegate else { return }
+        
+        // 先關閉現有的文本視窗，避免重複
+        if textWindow != nil {
+            logger.info("[顯示窗口] 關閉現有窗口，準備重新創建")
+            textWindow?.close()
+            textWindow = nil
+            // 給系統一點時間處理窗口關閉
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                logger.info("[顯示窗口] 延遲後創建新窗口")
+                self.createTextWindow(with: text)
+            }
+            return
+        }
+        
+        // 如果沒有現有視窗，直接創建
+        logger.info("[顯示窗口] 直接創建新窗口")
+        createTextWindow(with: text)
+    }
+    
+    // 將原本的 showTextWindow 邏輯分離到一個新方法
+    private func createTextWindow(with text: String) {
+        guard let appDelegate = appDelegate else { 
+            logger.error("無法創建文本窗口：appDelegate為nil")
+            return 
+        }
+        
+        logger.info("[創建窗口] 開始創建文本窗口")
+        
+        // 確保 AppState 有原始文本
+        AppState.shared.originalText = text
+        
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
+        
+        // 設定視窗大小為螢幕的 50% 寬度和 25% 高度，減小初始高度
+        let width = screenFrame.width * 0.5
+        let height = screenFrame.height * 0.25
+        let size = NSSize(width: width, height: height)
+        
+        // 計算視窗位置，使其位於畫面正中央
+        let origin = NSPoint(
+            x: screenFrame.midX - width / 2,
+            y: screenFrame.midY - height / 2
+        )
+        let windowFrame = NSRect(origin: origin, size: size)
+        let adjustedFrame = screenFrame.intersection(windowFrame)
+        
+        textWindow = NSPanel(contentRect: adjustedFrame,
+                     styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                     backing: .buffered, defer: false)
+        textWindow?.title = ""
+        textWindow?.titlebarAppearsTransparent = true
+        textWindow?.isMovableByWindowBackground = true
+        textWindow?.contentView?.wantsLayer = true
+
+        // 添加漸變背景
+        let gradient = CAGradientLayer()
+        gradient.frame = (textWindow?.contentView?.bounds)!
+        gradient.colors = [NSColor(red: 0.1, green: 0.1, blue: 0.15, alpha: 0.9).cgColor,
+                           NSColor(red: 0.15, green: 0.15, blue: 0.2, alpha: 0.9).cgColor]
+        gradient.locations = [0.0, 1.0]
+        textWindow?.contentView?.layer?.addSublayer(gradient)
+
+        textWindow?.isOpaque = false
+        textWindow?.backgroundColor = .clear
+        textWindow?.hasShadow = true
+        textWindow?.appearance = NSAppearance(named: .darkAqua)
+        
+        textWindow?.minSize = NSSize(width: 400, height: 250)
+        
+        // 現代化視窗設計 - 移除標題，添加頂部裝飾條
+        textWindow?.titleVisibility = .hidden
+        textWindow?.titlebarAppearsTransparent = true
+        
+        // 創建頂部裝飾條
+        let topBarView = NSView()
+        topBarView.wantsLayer = true
+        topBarView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 添加漸變效果到頂部裝飾條
+        let topBarGradient = CAGradientLayer()
+        topBarGradient.colors = [
+            NSColor(calibratedRed: 0.3, green: 0.6, blue: 0.9, alpha: 0.8).cgColor,  // 藍色調
+            NSColor(calibratedRed: 0.5, green: 0.3, blue: 0.9, alpha: 0.8).cgColor   // 紫色調
+        ]
+        topBarGradient.startPoint = CGPoint(x: 0, y: 0.5)
+        topBarGradient.endPoint = CGPoint(x: 1, y: 0.5)
+        topBarView.layer?.addSublayer(topBarGradient)
+        
+        // 添加視窗控制按鈕容器，確保控制按鈕在正確位置
+        let controlsContainerView = NSView()
+        controlsContainerView.translatesAutoresizingMaskIntoConstraints = false
+        textWindow?.contentView?.addSubview(controlsContainerView)
+        
+        NSLayoutConstraint.activate([
+            controlsContainerView.topAnchor.constraint(equalTo: textWindow!.contentView!.topAnchor),
+            controlsContainerView.leadingAnchor.constraint(equalTo: textWindow!.contentView!.leadingAnchor),
+            controlsContainerView.heightAnchor.constraint(equalToConstant: 28),
+            controlsContainerView.widthAnchor.constraint(equalToConstant: 80)
+        ])
+        
+        // 添加頂部裝飾條到視窗
+        textWindow?.contentView?.addSubview(topBarView)
+        
+        NSLayoutConstraint.activate([
+            topBarView.topAnchor.constraint(equalTo: controlsContainerView.bottomAnchor, constant: -1),
+            topBarView.leadingAnchor.constraint(equalTo: textWindow!.contentView!.leadingAnchor),
+            topBarView.trailingAnchor.constraint(equalTo: textWindow!.contentView!.trailingAnchor),
+            topBarView.heightAnchor.constraint(equalToConstant: 5)  // 薄的裝飾條
+        ])
+        
+        // 設置topBarGradient的框架
+        topBarGradient.frame = CGRect(x: 0, y: 0, width: textWindow!.frame.width, height: 5)
+        
+        // 創建內容視圖
+        let contentView = NSView(frame: (textWindow?.contentView?.bounds)!)
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        textWindow?.contentView?.addSubview(contentView)
+
+        let visualEffectView = NSVisualEffectView(frame: contentView.bounds)
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.state = .active
+        visualEffectView.material = .hudWindow
+        contentView.addSubview(visualEffectView)
+        visualEffectView.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            visualEffectView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            visualEffectView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            visualEffectView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            visualEffectView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+
+        // 主要區域
+        let mainArea = NSView()
+        mainArea.translatesAutoresizingMaskIntoConstraints = false
+        mainArea.identifier = NSUserInterfaceItemIdentifier("mainArea")
+        mainArea.wantsLayer = true
+        mainArea.layer?.backgroundColor = NSColor.clear.cgColor
+        contentView.addSubview(mainArea)
+
+        // 文字區域（圓角）
+        let textContainer = NSView()
+        textContainer.translatesAutoresizingMaskIntoConstraints = false
+        textContainer.wantsLayer = true
+        textContainer.layer?.backgroundColor = NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8).cgColor
+        textContainer.layer?.cornerRadius = 20
+        textContainer.layer?.shadowColor = NSColor.black.withAlphaComponent(0.3).cgColor
+        textContainer.layer?.shadowOffset = CGSize(width: 0, height: 2)
+        textContainer.layer?.shadowRadius = 5
+        textContainer.layer?.shadowOpacity = 1
+        textContainer.identifier = NSUserInterfaceItemIdentifier("textContainer")
+        mainArea.addSubview(textContainer)
+
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        textContainer.addSubview(scrollView)
+
+        // 修改 textView 的設置
+        let textView = NSTextView(frame: scrollView.bounds)
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.textContainerInset = NSSize(width: 15, height: 15)
+        textView.backgroundColor = NSColor.clear
+        textView.textColor = NSColor.white
+        textView.alignment = .left
+        textView.isRichText = true // 允許富文本
+        
+        // 設置自動調整大小和換行
+        textView.autoresizingMask = [.width, .height]
+        textView.isHorizontallyResizable = false // 設為 false 以跟隨視窗換行
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = true // 設為 true 讓文本容器寬度跟隨視圖
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude) // 寬度為0表示自動跟隨
+        
+        // 設置換行模式
+        textView.textContainer?.lineFragmentPadding = 5.0 // 減少行片段間的填充
+        
+        // 確保滾動視圖正確設置 - 增強滾動功能
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false // 禁用水平捲動，強制換行
+        scrollView.autohidesScrollers = false // 始終顯示滾動條
+        scrollView.verticalScrollElasticity = .allowed // 允許垂直彈性滾動
+        scrollView.contentView.postsBoundsChangedNotifications = true // 發送範圍變更通知
+        scrollView.borderType = .noBorder // 移除滾動視圖邊框
+        
+        // 添加滾動條樣式增強
+        if let verticalScroller = scrollView.verticalScroller {
+            verticalScroller.controlSize = .regular
+            verticalScroller.knobStyle = .light // 使用淺色滾動條滑塊
+        }
+        
+        // 確保可滾動，即使內容較少
+        textView.minSize = NSSize(width: 0, height: 0) // 最小高度為0，允許文本視圖比可見範圍小
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude) // 允許無限擴展
+        scrollView.hasVerticalRuler = false
+        scrollView.scrollerStyle = .overlay // 使用覆蓋式滾動條，更現代
+        
+        // 設置滾動視圖的內容大小
+        let extraHeight = getPungyuFont(size: 22).boundingRectForFont.height * 3 // 額外添加3行空間
+        let initialContentSize = NSSize(
+            width: scrollView.bounds.width,
+            height: max(scrollView.bounds.height, extraHeight)
+        )
+        textView.frame.size = initialContentSize
+        
+        // 設置主要內容約束
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: topBarView.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: textWindow!.contentView!.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: textWindow!.contentView!.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: textWindow!.contentView!.bottomAnchor),
+            
+            mainArea.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            mainArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            mainArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            mainArea.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
+            
+            textContainer.topAnchor.constraint(equalTo: mainArea.topAnchor),
+            textContainer.leadingAnchor.constraint(equalTo: mainArea.leadingAnchor),
+            textContainer.trailingAnchor.constraint(equalTo: mainArea.trailingAnchor),
+            textContainer.bottomAnchor.constraint(equalTo: mainArea.bottomAnchor),
+            
+            scrollView.topAnchor.constraint(equalTo: textContainer.topAnchor, constant: 10),
+            scrollView.leadingAnchor.constraint(equalTo: textContainer.leadingAnchor, constant: 10),
+            scrollView.trailingAnchor.constraint(equalTo: textContainer.trailingAnchor, constant: -10),
+            scrollView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor, constant: -10)
+        ])
+        
+        // 儲存文本視圖的引用供後續使用
+        currentTextView = textView
+        
+        // 顯示窗口
+        textWindow?.center()
+        textWindow?.makeKeyAndOrderFront(nil)
+        
+        // 初始化當前文本
+        textView.string = text
+
+        // 將 textWindow 設為 AppDelegate 的 textWindowController 的窗口
+        let windowController = NSWindowController(window: textWindow)
+        appDelegate.textWindowController = windowController
+        
+        // 更新 AppState 的窗口狀態
+        AppState.shared.updateWindowState(type: "text", isOpen: true)
+        
+        logger.info("[創建窗口] 完成創建文本窗口")
+    }
+    
+    // 添加一個屬性用於存儲當前活躍的文本視圖
+    private var currentTextView: NSTextView?
+    
+    // 提供公共方法來獲取當前文本視圖
+    func getCurrentTextView() -> NSTextView? {
+        return currentTextView
+    }
+    
+    // 添加方法來處理重寫文本
+    func rewriteText(_ text: String) {
+        guard let textView = currentTextView else {
+            logger.error("無法重寫文本：currentTextView為nil")
+            return
+        }
+
+        // 更新文本視圖的內容
+        textView.string = text
+        
+        // 更新窗口狀態
+        AppState.shared.updateWindowState(type: "text", isOpen: true)
+        
+        // 確保窗口可見
+        textWindow?.makeKeyAndOrderFront(nil)
+    }
+    
+    // 添加處理關閉窗口的方法
+    func closeTextWindow() {
+        logger.info("關閉文本窗口")
+        
+        textWindow?.close()
+        textWindow = nil
+        currentTextView = nil
+        
+        // 更新窗口狀態
+        AppState.shared.updateWindowState(type: "text", isOpen: false)
+    }
+}
+
+// 擴展 DispatchQueue 以添加帶參數的延遲執行方法
+extension DispatchQueue {
+    func asyncAfter(deadline: DispatchTime, execute work: DispatchWorkItem) {
+        self.asyncAfter(deadline: deadline, execute: work)
+    }
+}
