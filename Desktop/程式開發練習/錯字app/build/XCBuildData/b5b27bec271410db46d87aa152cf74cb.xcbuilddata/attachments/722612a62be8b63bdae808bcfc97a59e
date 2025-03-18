@@ -1,0 +1,70 @@
+{
+  "" : {
+    "const-values" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master.swiftconstvalues",
+    "dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master.d",
+    "diagnostics" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master.dia",
+    "emit-module-dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master-emit-module.dia",
+    "swift-dependencies" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferenceKit-master.swiftdeps"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/Algorithm.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Algorithm.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Algorithm.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Algorithm.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/AnyDifferentiable.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AnyDifferentiable.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AnyDifferentiable.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AnyDifferentiable.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/ArraySection.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ArraySection.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ArraySection.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ArraySection.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/Changeset.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Changeset.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Changeset.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Changeset.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/ContentEquatable.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentEquatable.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentEquatable.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentEquatable.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/ContentIdentifiable.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentIdentifiable.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentIdentifiable.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ContentIdentifiable.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/Differentiable.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Differentiable.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Differentiable.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/Differentiable.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/DifferentiableSection.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferentiableSection.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferentiableSection.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/DifferentiableSection.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/ElementPath.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ElementPath.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ElementPath.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/ElementPath.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/Extensions/AppKitExtension.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AppKitExtension.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AppKitExtension.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/AppKitExtension.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/Extensions/UIKitExtension.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/UIKitExtension.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/UIKitExtension.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/UIKitExtension.o"
+  },
+  "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/Sources/StagedChangeset.swift" : {
+    "index-unit-output-path" : "/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/StagedChangeset.o",
+    "llvm-bc" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/StagedChangeset.bc",
+    "object" : "/Users/circleghost/Library/Developer/Xcode/DerivedData/TextCorrection-cgxyrakqzggnjpdjwongqbuzkgvn/SourcePackages/checkouts/DifferenceKit/build/DifferenceKit.build/Release/DifferenceKit.build/Objects-normal/arm64/StagedChangeset.o"
+  }
+}

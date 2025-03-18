@@ -1,0 +1,120 @@
+{
+  "" : {
+    "const-values" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master.swiftconstvalues",
+    "dependencies" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master.d",
+    "diagnostics" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master.dia",
+    "emit-module-dependencies" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master-emit-module.dia",
+    "swift-dependencies" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrection-master.swiftdeps"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AccessibilityManager.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AccessibilityManager.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AccessibilityManager.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AccessibilityManager.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppDelegate.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppDelegate.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppKitBridge.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppKitBridge.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppKitBridge.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppKitBridge.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppSettings.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppSettings.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppSettings.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppSettings.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppState.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppState.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppState.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/AppState.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/ContentView.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/ContentView.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/HotKeyManager.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/HotKeyManager.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/HotKeyManager.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/HotKeyManager.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/NSColor+Extensions.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/NSColor+Extensions.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/NSColor+Extensions.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/NSColor+Extensions.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/OpenAIModels.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIModels.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIModels.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIModels.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/OpenAIService.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIService.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIService.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/OpenAIService.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/PasteboardManager.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PasteboardManager.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PasteboardManager.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PasteboardManager.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/PreferencesView.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesView.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesView.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesView.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/PreferencesWindow.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesWindow.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesWindow.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/PreferencesWindow.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/SettingsView.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/SettingsView.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/StatusItemManager.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/StatusItemManager.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/StatusItemManager.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/StatusItemManager.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/TextCorrectionApp.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionApp.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionApp.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionApp.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/TextCorrectionError.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionError.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionError.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionError.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/TextCorrectionView.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionView.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionView.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextCorrectionView.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/TextProcessing.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextProcessing.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextProcessing.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextProcessing.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/TextWindowManager.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextWindowManager.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextWindowManager.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/TextWindowManager.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/Utilities.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/Utilities.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/Utilities.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/Utilities.o"
+  },
+  "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/circleghost/Desktop/程式開發練習/錯字app/build/TextCorrection.build/Release/TextCorrection.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  }
+}
