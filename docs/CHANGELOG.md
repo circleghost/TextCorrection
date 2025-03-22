@@ -32,4 +32,49 @@
 - 添加視覺差異對比功能
 - 實現狀態欄整合
 - 添加全域熱鍵支援
-- 基本設定界面 
+- 基本設定界面
+
+## [1.0.1] - 2024-03-19
+
+### 修復
+- 🐛 修復設定視窗重複開啟問題
+  - 移除多餘的設定視窗創建邏輯
+  - 在AppDelegate.showSettings中添加重複開啟檢查
+  - 重新設計PreferencesWindow結構
+
+- 🐛 修復設定按鈕顯示"No Settings scene is defined"錯誤
+  - 替換SettingsLink為自定義Button
+  - 使用AppKitBridge.shared.showSettingsWindow()處理設定視窗開啟
+
+- 🐛 修復TextView選擇問題
+  - 完善NSTextView配置
+  - 添加必要的交互設置
+  - 修復acceptsFirstResponder相關問題
+
+### 優化
+- 💄 調整界面元素大小
+  - 應用圖標：120x120 → 150x150
+  - 主標題：36px → 42px
+  - 使用方法副標題：28px → 32px
+  - 指令列表圖標：32px → 40px
+  - 指令標題：20px → 24px
+  - 描述文字：16px → 18px
+  - 按鈕文字：18px → 20px
+  - 按鈕間距：水平30px → 35px，垂直12px → 14px
+  - 浮動按鈕：70x70 → 80x80，圖標28px → 32px
+  - 彈出視窗：寬度300px → 350px
+
+### 技術細節
+- 🔧 NSTextView配置更新：
+  ```swift
+  textView.isSelectable = true
+  textView.allowsUndo = true
+  textView.isFieldEditor = false
+  textView.allowsDocumentBackgroundColorChange = false
+  textView.allowsCharacterPickerTouchBarItem = true
+  ```
+
+- 🔧 設定視窗管理優化：
+  - 禁用系統默認Settings場景
+  - 統一使用AppKitBridge管理設定視窗
+  - 優化PreferencesWindow結構 

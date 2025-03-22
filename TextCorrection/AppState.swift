@@ -29,8 +29,26 @@ class AppState: ObservableObject, @unchecked Sendable {
     
     // API 狀態
     @Published var isApiKeyValid: Bool = false
-    @Published var isProcessing: Bool = false
+    
+    // 處理狀態，修改為使用自定義 didSet 以發送通知
+    private var _isProcessing: Bool = false
+    var isProcessing: Bool {
+        get {
+            return _isProcessing
+        }
+        set {
+            if _isProcessing != newValue {
+                _isProcessing = newValue
+                // 在狀態變更時發送通知
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: NSNotification.Name("TextProcessingStateChanged"), object: nil)
+                }
+            }
+        }
+    }
+    
     @Published var processingProgress: Double = 0.0
+    @Published var hasShownWelcomeScreen: Bool = false
     
     // 文本校正相關
     @Published var originalText: String = ""
@@ -42,6 +60,7 @@ class AppState: ObservableObject, @unchecked Sendable {
     @Published var isTextWindowOpen: Bool = false
     @Published var isSettingsWindowOpen: Bool = false
     @Published var isFloatingButtonVisible: Bool = false
+    @Published var isFeedbackViewOpen: Bool = false
     
     // 擴展：文本處理統計
     @Published var characterCount: Int = 0
@@ -116,6 +135,8 @@ class AppState: ObservableObject, @unchecked Sendable {
     // 私有初始化器防止外部創建實例
     private init() {
         logger.debug("AppState 初始化")
+        // 檢查是否首次啟動
+        hasShownWelcomeScreen = UserDefaults.standard.bool(forKey: "hasShownWelcomeScreen")
         loadSettings()
     }
     
@@ -468,8 +489,8 @@ class AppState: ObservableObject, @unchecked Sendable {
     func printDebugState() {
         // 使用線程安全的方式獲取熱鍵狀態
         let isHotkeyActive = self.isHotkeyActive
-        let hotKeyModifiers = self.hotKeyModifiers
-        let hotKeyCharacter = self.hotKeyCharacter
+        let _ = self.hotKeyModifiers
+        let _ = self.hotKeyCharacter
         
         logger.debug("""
         ===== AppState 狀態 =====
@@ -505,6 +526,12 @@ class AppState: ObservableObject, @unchecked Sendable {
         // 發送通知
         logger.debug("文本已更新：原始字符數 \(self.originalCharacterCount)，校正後字符數 \(self.characterCount)，變更詞數 \(self.wordsChanged)")
         self.objectWillChange.send()
+    }
+    
+    /// 標記歡迎頁面已顯示
+    func markWelcomeScreenAsShown() {
+        hasShownWelcomeScreen = true
+        UserDefaults.standard.set(true, forKey: "hasShownWelcomeScreen")
     }
 }
 

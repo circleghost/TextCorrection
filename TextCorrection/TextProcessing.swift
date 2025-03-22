@@ -5,6 +5,21 @@ class TextProcessing: @unchecked Sendable {
     // 添加日誌對象
     private static let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextProcessing")
     
+    // 添加粉圓體字體輔助方法
+    private static func getPungyuFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        // 嘗試多種可能的粉圓體字體名稱
+        let fontNames = ["jf-openhuninn", "JF Open Huninn", "粉圓體", "jf粉圓體", "JF粉圓體"]
+        
+        for name in fontNames {
+            if let font = NSFont(name: name, size: size) {
+                return font
+            }
+        }
+        
+        // 如果找不到粉圓體，回退到系統字體
+        return NSFont.systemFont(ofSize: size, weight: weight)
+    }
+    
     static func compareTexts(original: String, rewritten: String, customFont: NSFont) -> NSAttributedString {
         // 記錄比較前的文本
         logger.info("開始比較文本 - 原始文本長度: \(original.count)字符, 重寫文本長度: \(rewritten.count)字符")
@@ -16,8 +31,11 @@ class TextProcessing: @unchecked Sendable {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 8  // 增加行間距
         
+        // 使用粉圓體字體替代customFont
+        let pungyuFont = getPungyuFont(size: 26)
+        
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: customFont,
+            .font: pungyuFont,
             .foregroundColor: NSColor.white,
             .paragraphStyle: paragraphStyle,
             .kern: 1.5  // 增加字距
@@ -146,95 +164,85 @@ class TextProcessing: @unchecked Sendable {
         case delete(String)
     }
     
-    // 優化差異合併，提高可讀性
+    // 優化差異合併函數，提高效能並修正記憶體使用
     static func optimizeDiff(_ diff: [DiffChange]) -> [DiffChange] {
-        var optimized = [DiffChange]()
-        var currentEqual = ""
-        var currentInsert = ""
-        var currentDelete = ""
+        guard !diff.isEmpty else { return [] }
         
-        // 檢查當前累積的刪除和插入是否只是順序變更
-        let checkForOrderChange = {
-            if !currentDelete.isEmpty && !currentInsert.isEmpty {
-                // 檢查累積的刪除和插入是否只是順序變更
-                if isJustWordOrderChange(currentDelete, currentInsert) {
-                    // 直接採用新的順序，不標記為錯誤
-                    optimized.append(.equal(currentInsert))
-                    currentDelete = ""
-                    currentInsert = ""
-                    return true
+        // 使用autoreleasepool降低記憶體壓力
+        return autoreleasepool { () -> [DiffChange] in
+            var result = [DiffChange]()
+            result.reserveCapacity(diff.count) // 預先分配容量
+            
+            var currentEqual = ""
+            var currentInsert = ""
+            var currentDelete = ""
+            
+            // 合併差異函數，將當前累積的變更添加到結果
+            let mergeChanges = {
+                // 清理不必要的空字串
+                if !currentEqual.isEmpty {
+                    result.append(.equal(currentEqual))
+                    currentEqual = ""
                 }
-            }
-            return false
-        }
-        
-        // 優先處理段落級別的差異
-        let processPending = {
-            // 首先檢查是否只是詞序變化
-            if checkForOrderChange() {
-                // 如果是詞序變化，已在checkForOrderChange中處理
-            } else if !currentDelete.isEmpty && !currentInsert.isEmpty {
-                // 使用更高級的差異比較來檢測相似但有修改的短語
-                if isSignificantlySimilar(currentDelete, currentInsert) {
-                    // 如果文本非常相似，找出確切的差異
-                    let detailedDiff = diffStringsDetailed(currentDelete, currentInsert)
-                    optimized.append(contentsOf: detailedDiff)
+                
+                // 特殊處理：如果刪除和插入部分相同，將它們視為相等部分
+                if currentDelete == currentInsert && !currentDelete.isEmpty {
+                    result.append(.equal(currentDelete))
                 } else {
-                    // 否則展示為刪除後插入
-                    optimized.append(.delete(currentDelete))
-                    optimized.append(.insert(currentInsert))
+                    // 處理刪除和插入部分
+                    if !currentDelete.isEmpty {
+                        result.append(.delete(currentDelete))
+                    }
+                    if !currentInsert.isEmpty {
+                        result.append(.insert(currentInsert))
+                    }
                 }
+                
+                // 清空累積的變更
                 currentDelete = ""
-                currentInsert = ""
-            } else if !currentDelete.isEmpty {
-                optimized.append(.delete(currentDelete))
-                currentDelete = ""
-            } else if !currentInsert.isEmpty {
-                optimized.append(.insert(currentInsert))
                 currentInsert = ""
             }
             
-            // 最後處理相等部分
+            // 遍歷所有差異，合併相鄰的同類變更
+            for change in diff {
+                switch change {
+                case .equal(let text):
+                    // 如果有累積的插入或刪除，先處理它們
+                    if !currentInsert.isEmpty || !currentDelete.isEmpty {
+                        mergeChanges()
+                    }
+                    // 累積相等部分
+                    currentEqual += text
+                    
+                case .insert(let text):
+                    // 如果有累積的相等部分，先添加到結果
+                    if !currentEqual.isEmpty {
+                        result.append(.equal(currentEqual))
+                        currentEqual = ""
+                    }
+                    // 累積插入部分
+                    currentInsert += text
+                    
+                case .delete(let text):
+                    // 如果有累積的相等部分，先添加到結果
+                    if !currentEqual.isEmpty {
+                        result.append(.equal(currentEqual))
+                        currentEqual = ""
+                    }
+                    // 累積刪除部分
+                    currentDelete += text
+                }
+            }
+            
+            // 處理剩餘的累積變更
             if !currentEqual.isEmpty {
-                optimized.append(.equal(currentEqual))
-                currentEqual = ""
+                result.append(.equal(currentEqual))
+            } else if !currentInsert.isEmpty || !currentDelete.isEmpty {
+                mergeChanges()
             }
+            
+            return result
         }
-        
-        // 分析差異，根據上下文優化顯示
-        for change in diff {
-            switch change {
-            case .equal(let text):
-                // 處理待處理的變更
-                processPending()
-                // 累積新的相等部分
-                currentEqual += text
-                
-            case .insert(let text):
-                // 處理任何待處理的相等部分
-                if !currentEqual.isEmpty {
-                    optimized.append(.equal(currentEqual))
-                    currentEqual = ""
-                }
-                // 累積插入內容
-                currentInsert += text
-                
-            case .delete(let text):
-                // 處理任何待處理的相等部分
-                if !currentEqual.isEmpty {
-                    optimized.append(.equal(currentEqual))
-                    currentEqual = ""
-                }
-                // 累積刪除內容
-                currentDelete += text
-            }
-        }
-        
-        // 處理剩餘的待處理內容
-        processPending()
-        
-        // 合併相鄰的相同類型變更
-        return mergeAdjacentChanges(optimized)
     }
     
     // 檢查兩個字符串是否非常相似（只有微小的差異）
@@ -341,260 +349,101 @@ class TextProcessing: @unchecked Sendable {
         return result
     }
     
-    // 使用改進的字元級比較算法，專注於錯字檢測
+    // 優化差異函數以改善記憶體管理
     static func diffStrings(_ old: String, _ new: String) -> [DiffChange] {
-        // 記錄比較前的文本內容
-        logger.debug("比較前原始文本:\n\(old)")
-        logger.debug("比較前重寫文本:\n\(new)")
+        if old.isEmpty && new.isEmpty { return [] }
+        if old.isEmpty { return [.insert(new)] }
+        if new.isEmpty { return [.delete(old)] }
+        if old == new { return [.equal(old)] }
         
-        // 完全相同的文本直接返回相等
-        if old == new {
-            return [.equal(old)]
-        }
-        
-        // 短文本特殊處理
-        if old.count <= 3 && old.count >= 2 && new.count <= 3 && new.count >= 2 {
-            if isJustWordOrderChange(old, new) {
-                return [.equal(new)]
-            }
-        }
-        
-        // 將文本分割為段落，以換行符為界
-        let oldParagraphs = old.components(separatedBy: "\n")
-        let newParagraphs = new.components(separatedBy: "\n")
-        
+        // 使用高效能的字串比較，避免過多的記憶體分配
         var result = [DiffChange]()
         
-        // 比較每個段落
-        let maxParagraphCount = max(oldParagraphs.count, newParagraphs.count)
+        // 改進：預先分配容量，減少記憶體重分配
+        result.reserveCapacity(max(old.count, new.count) / 5) // 粗估字元變更數
         
-        for i in 0..<maxParagraphCount {
-            // 獲取當前段落，如果索引超出範圍則使用空字符串
-            let oldParagraph = i < oldParagraphs.count ? oldParagraphs[i] : ""
-            let newParagraph = i < newParagraphs.count ? newParagraphs[i] : ""
+        // 使用autoreleasepool確保中間字串及時釋放
+        autoreleasepool {
+            let oldChars = Array(old)
+            let newChars = Array(new)
             
-            // 如果段落相同，直接添加為相等
-            if oldParagraph == newParagraph {
-                if !oldParagraph.isEmpty {
-                    result.append(.equal(oldParagraph))
+            // 創建動態規劃表
+            var dp = [[Int]](repeating: [Int](repeating: 0, count: newChars.count + 1), count: oldChars.count + 1)
+            
+            // 填充dp表
+            for i in 0...oldChars.count {
+                for j in 0...newChars.count {
+                    if i == 0 {
+                        dp[i][j] = j
+                    } else if j == 0 {
+                        dp[i][j] = i
+                    } else if oldChars[i-1] == newChars[j-1] {
+                        dp[i][j] = dp[i-1][j-1]
+                    } else {
+                        dp[i][j] = min(dp[i-1][j], dp[i][j-1]) + 1
+                    }
                 }
-            } else {
-                // 對不同的段落進行字元級別的比較
-                let paragraphDiff = diffStringsByCharacter(oldParagraph, newParagraph)
-                result.append(contentsOf: paragraphDiff)
             }
             
-            // 如果不是最後一個段落，添加換行符
-            if i < maxParagraphCount - 1 {
-                result.append(.equal("\n"))
-            }
-        }
-        
-        // 記錄比較結果
-        logger.debug("段落比較完成，總共比較了 \(maxParagraphCount) 個段落")
-        
-        return result
-    }
-    
-    // 字元級別的比較算法，專注於錯字檢測
-    private static func diffStringsByCharacter(_ old: String, _ new: String) -> [DiffChange] {
-        // 完全相同的文本直接返回相等
-        if old == new {
-            return [.equal(old)]
-        }
-        
-        // 特殊處理2字元的中文短詞
-        if old.count == 2 && isAllChineseCharacters(old) && isAllChineseCharacters(new) && 
-           isJustWordOrderChange(old, new) {
-            return [.equal(new)]
-        }
-        
-        // 進行基本的字元級比較
-        let oldChars = Array(old)
-        let newChars = Array(new)
-        let m = oldChars.count
-        let n = newChars.count
-        
-        // 如果任一字符串為空，直接返回結果
-        if m == 0 {
-            return [.insert(new)]
-        }
-        if n == 0 {
-            return [.delete(old)]
-        }
-        
-        // 構建 LCS 表
-        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
-        
-        for i in 1...m {
-            for j in 1...n {
-                if oldChars[i-1] == newChars[j-1] {
-                    dp[i][j] = dp[i-1][j-1] + 1
+            // 回溯找出差異
+            var i = oldChars.count
+            var j = newChars.count
+            
+            var currentEqual = ""
+            var currentDelete = ""
+            var currentInsert = ""
+            
+            // 使用回溯法找出最短編輯序列
+            while i > 0 || j > 0 {
+                if i > 0 && j > 0 && oldChars[i-1] == newChars[j-1] {
+                    // 相同字元
+                    currentEqual = String(oldChars[i-1]) + currentEqual
+                    i -= 1
+                    j -= 1
                 } else {
-                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
-                }
-            }
-        }
-        
-        // 基於 LCS 構建差異序列
-        var diff = [DiffChange]()
-        var i = m, j = n
-        
-        while i > 0 || j > 0 {
-            if i > 0 && j > 0 && oldChars[i-1] == newChars[j-1] {
-                // 當前字符相同
-                diff.insert(.equal(String(oldChars[i-1])), at: 0)
-                i -= 1
-                j -= 1
-            } else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
-                // 插入發生的情況
-                diff.insert(.insert(String(newChars[j-1])), at: 0)
-                j -= 1
-            } else {
-                // 刪除發生的情況
-                diff.insert(.delete(String(oldChars[i-1])), at: 0)
-                i -= 1
-            }
-        }
-        
-        // 後處理差異序列，修復誤判情況
-        return postProcessDiff(diff, originalText: old)
-    }
-    
-    // 後處理差異序列，修復誤判情況
-    private static func postProcessDiff(_ diff: [DiffChange], originalText: String) -> [DiffChange] {
-        // 簡單後處理：合併相鄰的相同類型差異
-        var optimizedDiff = [DiffChange]()
-        var currentEqual = ""
-        var currentInsert = ""
-        var currentDelete = ""
-        
-        // 處理函數，將累積的變更添加到結果中
-        let processPending = {
-            // 特殊處理：檢查是否有刪除和插入相同字符的情況
-            if !currentDelete.isEmpty && !currentInsert.isEmpty {
-                // 特殊情況1：完全相同的字符被標記為刪除和插入
-                if currentDelete == currentInsert {
-                    optimizedDiff.append(.equal(currentDelete))
-                    currentDelete = ""
-                    currentInsert = ""
-                    return
-                }
-                
-                // 特殊情況2：檢查相同字符在相鄰位置出現
-                let deleteChars = Array(currentDelete)
-                let insertChars = Array(currentInsert)
-                
-                // 使用集合找出共同字符
-                let deleteSet = Set(deleteChars)
-                let insertSet = Set(insertChars)
-                let commonChars = deleteSet.intersection(insertSet)
-                
-                // 檢查當刪除字符和插入字符高度相似時（例如只是位置不同）
-                if !commonChars.isEmpty && 
-                   Double(commonChars.count) / Double(max(deleteSet.count, insertSet.count)) > 0.7 {
-                    // 構建修正後的顯示文本
-                    var result = ""
-                    var usedDeleteIndices = Set<Int>()
-                    var usedInsertIndices = Set<Int>()
+                    // 提交當前累積的相同部分
+                    if !currentEqual.isEmpty {
+                        result.insert(.equal(currentEqual), at: 0)
+                        currentEqual = ""
+                    }
                     
-                    // 遍歷兩個字符數組，尋找相同字符，優先保留它們
-                    for (dIndex, dChar) in deleteChars.enumerated() {
-                        for (iIndex, iChar) in insertChars.enumerated() {
-                            if dChar == iChar && !usedDeleteIndices.contains(dIndex) && !usedInsertIndices.contains(iIndex) {
-                                result += String(dChar)
-                                usedDeleteIndices.insert(dIndex)
-                                usedInsertIndices.insert(iIndex)
-                                break
-                            }
+                    if j > 0 && (i == 0 || dp[i][j-1] <= dp[i-1][j]) {
+                        // 插入操作
+                        currentInsert = String(newChars[j-1]) + currentInsert
+                        j -= 1
+                    } else if i > 0 {
+                        // 刪除操作
+                        currentDelete = String(oldChars[i-1]) + currentDelete
+                        i -= 1
+                    }
+                    
+                    // 檢查是否需要提交當前累積的插入/刪除部分
+                    if (i > 0 && j > 0 && oldChars[i-1] == newChars[j-1]) || (i == 0 && j == 0) {
+                        if !currentDelete.isEmpty {
+                            result.insert(.delete(currentDelete), at: 0)
+                            currentDelete = ""
+                        }
+                        if !currentInsert.isEmpty {
+                            result.insert(.insert(currentInsert), at: 0)
+                            currentInsert = ""
                         }
                     }
-                    
-                    // 添加剩餘的刪除和插入字符
-                    for (index, char) in deleteChars.enumerated() {
-                        if !usedDeleteIndices.contains(index) {
-                            optimizedDiff.append(.delete(String(char)))
-                        }
-                    }
-                    
-                    if !result.isEmpty {
-                        optimizedDiff.append(.equal(result))
-                    }
-                    
-                    for (index, char) in insertChars.enumerated() {
-                        if !usedInsertIndices.contains(index) {
-                            optimizedDiff.append(.insert(String(char)))
-                        }
-                    }
-                    
-                    currentDelete = ""
-                    currentInsert = ""
-                    return
                 }
             }
             
-            // 處理常規情況
+            // 處理結尾剩餘部分
             if !currentEqual.isEmpty {
-                optimizedDiff.append(.equal(currentEqual))
-                currentEqual = ""
+                result.insert(.equal(currentEqual), at: 0)
             }
             if !currentDelete.isEmpty {
-                optimizedDiff.append(.delete(currentDelete))
-                currentDelete = ""
+                result.insert(.delete(currentDelete), at: 0)
             }
             if !currentInsert.isEmpty {
-                optimizedDiff.append(.insert(currentInsert))
-                currentInsert = ""
+                result.insert(.insert(currentInsert), at: 0)
             }
         }
         
-        // 合併相鄰的變更
-        for change in diff {
-            switch change {
-            case .equal(let text):
-                if !currentInsert.isEmpty || !currentDelete.isEmpty {
-                    processPending()
-                }
-                currentEqual += text
-            case .insert(let text):
-                if !currentEqual.isEmpty {
-                    optimizedDiff.append(.equal(currentEqual))
-                    currentEqual = ""
-                }
-                currentInsert += text
-            case .delete(let text):
-                if !currentEqual.isEmpty {
-                    optimizedDiff.append(.equal(currentEqual))
-                    currentEqual = ""
-                }
-                currentDelete += text
-            }
-        }
-        
-        // 處理剩餘的變更
-        processPending()
-        
-        // 檢查最終結果中是否包含任何實際變更
-        var hasChanges = false
-        for change in optimizedDiff {
-            switch change {
-            case .insert(_), .delete(_):
-                hasChanges = true
-                break
-            case .equal(_):
-                continue
-            }
-            if hasChanges {
-                break
-            }
-        }
-        
-        // 如果沒有實際變更但文本可能看起來相同，直接返回相等
-        if !hasChanges {
-            return [.equal(originalText)]
-        }
-        
-        return optimizedDiff
+        return result
     }
     
     // 輔助方法：檢查是否為中文字符

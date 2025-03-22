@@ -6,6 +6,7 @@ import KeychainAccess
 import os.log
 import Combine
 import ApplicationServices
+import UserNotifications
 
 // 確保在整個檔案都可以使用 AppState
 import Foundation
@@ -26,7 +27,7 @@ func getOpenAIApiKey() -> String {
 extension AppDelegate: @unchecked Sendable {}
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var statusItemManager: StatusItemManager!
     var pasteboardManager: PasteboardManager!
     var textWindowManager: TextWindowManager!
@@ -40,9 +41,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     
     var floatingButton: NSWindow?
-    var textWindow: NSWindow?
-    var settingsWindow: NSWindow?
-    var swiftUIWindow: NSWindow?
     private var lastSelectedText: String?
     private var isRewriting = false
     private var isProcessingCopy = false
@@ -80,27 +78,80 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var isApiKeyValid: Bool = false
 
-    override init() {
-        // 初始化自定義字體
-        if let tsangerFont = NSFont(name: "TsangerJinKai01-W05", size: 14) {
-            customFont = tsangerFont
-        } else if let yuantiTC = NSFont(name: "Yuanti TC", size: 14) {
-            customFont = yuantiTC
-        } else {
-            customFont = NSFont.systemFont(ofSize: 14)
+    private var welcomeWindow: NSWindow?
+    var textWindow: NSWindow?
+    private var settingsWindow: NSWindow?
+    private var swiftUITextWindow: NSWindow?
+    private var feedbackWindow: NSWindow?
+    private var logsWindow: NSWindow?
+    
+    // 添加粉圓體字體輔助方法 - 改為靜態方法
+    private static func getPungyuFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        // 嘗試多種可能的粉圓體字體名稱
+        let fontNames = ["jf-openhuninn", "JF Open Huninn", "粉圓體", "jf粉圓體", "JF粉圓體"]
+        
+        for name in fontNames {
+            if let font = NSFont(name: name, size: size) {
+                return font
+            }
         }
+        
+        // 如果找不到粉圓體，回退到系統字體
+        return NSFont.systemFont(ofSize: size, weight: weight)
+    }
+
+    override init() {
+        // 初始化自定義字體為粉圓體 - 使用靜態方法
+        customFont = AppDelegate.getPungyuFont(size: 14)
         
         super.init()
     }
     
+    /// 應用程式啟動
     func applicationDidFinishLaunching(_ notification: Notification) {
-        logger.info("應用程式啟動")
+        // 初始化日誌系統
+        logger.info("應用程式啟動中...")
         
-        // 設置應用程式代理
+        // 先檢查 API key 是否存在，不存在則顯示設定畫面
+        if getOpenAIApiKey().isEmpty {
+            logger.info("未找到 API key，顯示設定畫面")
+            // 延遲一點時間確保應用程式完全載入
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                
+                // 使用統一的方法顯示設定窗口
+                self.showSettings()
+                
+                // 添加一個提示通知
+                AppState.shared.addNotification(
+                    title: "需要 API key",
+                    message: "請輸入 OpenAI API key 以啟用文字校正功能",
+                    type: .warning
+                )
+            }
+        }
+        
+        // 配置狀態欄圖標和菜單
+        statusItemManager = StatusItemManager(appDelegate: self)
+        
+        // 初始化剪貼簿監控
+        pasteboardManager = PasteboardManager(appDelegate: self)
+        
+        // 初始化 LogManager
+        _ = LogManager.shared
+        
+        // 記錄應用啟動
+        logger.infoWithManager("===== 應用程式啟動 =====")
+        
         AppKitBridge.shared.appDelegate = self
         
-        // 檢查輔助功能權限
-        checkAccessibilityPermissions()
+        // 設置通知中心代理（通過擴展實現）
+        UNUserNotificationCenter.current().delegate = self
+        
+        // 使用AccessibilityManager檢查權限
+        Task { @MainActor in
+            AccessibilityManager.checkPermissionsOnLaunch()
+        }
         
         // 設置狀態訂閱
         setupStateSubscriptions()
@@ -117,6 +168,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 打印初始狀態（用於調試）
         AppState.shared.printDebugState()
         AppKitBridge.shared.printDebugState()
+        
+        // 發送啟動通知
+        NotificationManager.shared.sendNotification(
+            title: "錯字糾正已啟動",
+            message: "應用程式已在背景運行，可以通過菜單欄圖標或熱鍵使用。",
+            type: .info,
+            delay: 1.0
+        )
     }
     
     /// 檢查輔助功能權限
@@ -427,6 +486,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         appDelegate.logger.debug("文本處理完成，用時: \(String(format: "%.2f", processingTime))秒，變更詞數: \(finalTotalWordsChanged)")
                     }
                 }
+                
+                // 發送系統通知
+                NotificationManager.shared.sendCorrectionCompleteNotification(
+                    originalTextCount: textToProcess.count,
+                    correctedTextCount: finalProcessedText.count,
+                    wordsChanged: finalTotalWordsChanged
+                )
             } catch {
                 // 使用 MainActor 運行錯誤處理代碼
                 await MainActor.run {
@@ -449,6 +515,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         appDelegate.logger.error("處理文本時發生錯誤：\(error.localizedDescription)")
                     }
                 }
+                
+                // 發送錯誤通知
+                NotificationManager.shared.sendErrorNotification(errorMessage: error.localizedDescription)
             }
         }
     }
@@ -797,7 +866,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.makeKeyAndOrderFront(nil)
             
             // 保存視窗引用
-            self.swiftUIWindow = window
+            self.swiftUITextWindow = window
             
             // 開始處理文本
             self.processText(text)
@@ -815,6 +884,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let hostingController = NSHostingController(rootView: settingsView)
         
+        // 查找是否已有同標題窗口存在
+        for existingWindow in NSApp.windows where existingWindow.title == "設定" && existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            
+            // 確保狀態一致
+            AppState.shared.isSettingsWindowOpen = true
+            AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
+            
+            // 保存已存在的窗口引用
+            self.settingsWindow = existingWindow
+            return
+        }
+        
         let newWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 450, height: 600),
             styleMask: [.titled, .closable, .miniaturizable],
@@ -830,12 +913,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         
+        // 添加窗口關閉通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsWindowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: newWindow
+        )
+        
         // 更新狀態
         AppState.shared.isSettingsWindowOpen = true
         AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
         
         // 設置窗口引用
         self.settingsWindow = newWindow
+    }
+    
+    // 設定窗口關閉時的處理
+    @objc private func settingsWindowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window == self.settingsWindow else {
+            return
+        }
+        
+        logger.debug("設定窗口將要關閉")
+        AppState.shared.isSettingsWindowOpen = false
+        AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: false)
+        settingsWindow = nil
     }
 
     // 顯示設定視窗
@@ -845,6 +949,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 確保所有 UI 操作在主線程執行
         Task { @MainActor in
+            // 先檢查是否有現有的「設定」窗口已經打開（包括由其他方式創建的）
+            for existingWindow in NSApp.windows where existingWindow.title == "設定" && existingWindow.isVisible {
+                existingWindow.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                
+                // 確保狀態一致
+                AppState.shared.isSettingsWindowOpen = true
+                AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
+                return
+            }
+            
             // 檢查窗口是否已存在
             if self.settingsWindow == nil {
                 // 使用新的方法創建窗口
@@ -859,6 +974,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: true)
             }
         }
+    }
+    
+    /// 顯示反饋表單視窗
+    @objc func showFeedbackView() {
+        logger.info("顯示反饋表單視窗")
+        
+        // 創建SwiftUI視圖
+        let contentView = FeedbackView()
+            .environmentObject(AppState.shared)
+        
+        // 創建視窗
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 580),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        // 配置視窗
+        window.title = "提交反饋"
+        window.center()
+        window.contentView = NSHostingView(rootView: contentView)
+        window.isReleasedWhenClosed = true
+        window.level = .floating
+        
+        // 顯示視窗
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // 設置狀態
+        AppState.shared.isFeedbackViewOpen = true
+        
+        // 設置關閉回調
+        window.delegate = self
     }
     
     // 添加 copyAndPasteRewrittenText 方法，因為 AppKitBridge 中引用了這個方法
@@ -1055,9 +1204,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return corrected
     }
     
-    // 清理資源
+    // 應用程式即將終止
     func applicationWillTerminate(_ notification: Notification) {
         logger.info("應用程式即將終止，清理資源")
+        
+        // 先釋放文本窗口管理器，確保它的deinit被正確調用
+        if textWindow != nil {
+            textWindow?.close()
+            textWindow = nil
+        }
+        textWindowManager = nil
         
         // 先停止熱鍵監聽，避免觸發回調而使用已釋放的資源
         hotKeyManager?.disableHotKey()
@@ -1069,16 +1225,124 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 清理其他資源
         statusItemManager = nil
-        textWindowManager = nil
         openAIService = nil
         
         // 取消所有訂閱
         cancellables.removeAll()
+        
+        // 強制執行記憶體釋放
+        autoreleasepool {
+            NSApp.windows.forEach { $0.close() }
+        }
     }
 
     private func initializeHotKeyManager(appDelegate: AppDelegate) {
         hotKeyManager = HotKeyManager(appDelegate: appDelegate)
         logger.info("熱鍵管理器初始化完成")
+    }
+    
+    // MARK: - 視窗展示方法
+    
+    /// 顯示歡迎/使用指南視窗
+    func showWelcomeView() {
+        logger.info("顯示歡迎/使用指南視窗")
+        
+        // 查找並關閉所有 "WelcomeWindow" 類型的視窗
+        for window in NSApp.windows where window.title == "歡迎使用錯字糾正" {
+            window.close()
+        }
+        
+        // 如果已有目前的歡迎視窗，關閉它
+        if let existingWindow = welcomeWindow {
+            existingWindow.close()
+            welcomeWindow = nil
+        }
+        
+        // 創建一個新的視窗
+        let welcomeView = WelcomeView().environmentObject(AppState.shared)
+        let hostingController = NSHostingController(rootView: welcomeView)
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 650),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.center()
+        window.setFrameAutosaveName("WelcomeWindow")
+        window.title = "歡迎使用錯字糾正"
+        window.contentViewController = hostingController
+        
+        // 存儲窗口引用
+        welcomeWindow = window
+        
+        // 設置窗口關閉時的通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(welcomeWindowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+        
+        // 顯示窗口
+        window.makeKeyAndOrderFront(nil)
+    }
+    
+    /// 當歡迎窗口關閉時調用
+    @objc func welcomeWindowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window == welcomeWindow else {
+            return
+        }
+        
+        // 清除窗口引用
+        welcomeWindow = nil
+        
+        // 標記歡迎頁面已顯示
+        AppState.shared.markWelcomeScreenAsShown()
+    }
+
+    /// 顯示日誌視圖
+    @objc func showLogsView() {
+        logger.info("打開日誌視窗")
+        
+        // 如果日誌窗口已存在，則顯示它
+        if let window = logsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        // 創建日誌視圖
+        let logsView = LogsView()
+        
+        // 創建窗口控制器
+        let hostingController = NSHostingController(rootView: logsView)
+        
+        // 創建窗口
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        // 設置窗口屬性
+        window.title = "應用程式日誌"
+        window.contentViewController = hostingController
+        window.center()
+        window.setFrameAutosaveName("LogsWindow")
+        
+        // 設置窗口委託，處理窗口關閉事件
+        window.delegate = self
+        
+        // 保存窗口引用
+        logsWindow = window
+        
+        // 顯示窗口
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -1088,30 +1352,26 @@ extension AppDelegate: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
         
-        // 確保在主線程處理UI更新
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            if window == self.textWindow {
-                self.logger.debug("文本窗口將要關閉")
-                AppState.shared.isTextWindowOpen = false
-                AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
-                self.textWindow = nil
-            } else if window == self.settingsWindow {
-                self.logger.debug("設定視窗將要關閉")
-                // 先更新狀態
-                AppState.shared.isSettingsWindowOpen = false
-                AppKitBridge.shared.notifyWindowStateChanged(type: "settings", isVisible: false)
-                // 重要：設置為 nil 以避免同步訪問問題
-                self.settingsWindow = nil
-            } else if window == self.swiftUIWindow {
-                self.logger.debug("SwiftUI 文本窗口將要關閉")
-                AppState.shared.isTextWindowOpen = false
-                AppKitBridge.shared.notifyWindowStateChanged(type: "text", isVisible: false)
-                self.swiftUIWindow = nil
-            }
+        // 識別關閉的窗口
+        if window == textWindow {
+            self.logger.debug("文本窗口將要關閉")
+            AppState.shared.isTextWindowOpen = false
+            textWindow = nil
+        } else if window == swiftUITextWindow {
+            self.logger.debug("SwiftUI 文本窗口將要關閉")
+            AppState.shared.isTextWindowOpen = false
+            swiftUITextWindow = nil
+        } else if window == feedbackWindow {
+            self.logger.debug("反饋表單窗口將要關閉")
+            AppState.shared.isFeedbackViewOpen = false
+            feedbackWindow = nil
+        } else if window == welcomeWindow {
+            self.logger.debug("歡迎視窗將要關閉")
+            AppState.shared.markWelcomeScreenAsShown()
+            welcomeWindow = nil
+        } else if window == logsWindow {
+            self.logger.debug("日誌視窗將要關閉")
+            logsWindow = nil
         }
     }
 }
-
-// ... 其餘擴展保持不變 ...

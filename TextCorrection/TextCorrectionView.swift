@@ -52,6 +52,11 @@ struct TextDifferenceView: NSViewRepresentable, @unchecked Sendable {
         textView.isSelectable = true
         textView.isFieldEditor = false
         
+        // 啟用用戶交互
+        textView.allowsDocumentBackgroundColorChange = false
+        textView.allowsCharacterPickerTouchBarItem = true
+        textView.allowsUndo = true
+        
         // 適當的字體設置
         let font = NSFont.systemFont(ofSize: 22)
         textView.font = font
@@ -483,8 +488,8 @@ struct TextCorrectionView: View, @unchecked Sendable {
     // 顯示設置窗口
     private func showSettings() {
         logger.debug("顯示設置窗口")
-        showingSettings = true
-        appState.isSettingsWindowOpen = true
+        // 改用AppKitBridge統一調用設定窗口
+        AppKitBridge.shared.showSettingsWindow()
     }
     
     // 更新窗口狀態

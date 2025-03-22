@@ -44,10 +44,11 @@ public class AppKitBridge: ObservableObject {
     
     /// 設置與AppState的訂閱關係
     private func setupSubscriptions() {
-        // 訂閱AppState的isProcessing狀態
-        AppState.shared.$isProcessing
-            .sink { [weak self] isProcessing in
+        // 監聽TextProcessingStateChanged通知
+        NotificationCenter.default.publisher(for: NSNotification.Name("TextProcessingStateChanged"))
+            .sink { [weak self] _ in
                 guard let self = self else { return }
+                let isProcessing = AppState.shared.isProcessing
                 self.isTextBeingProcessed = isProcessing
                 self.logger.debug("文本處理狀態更新: \(isProcessing)")
             }

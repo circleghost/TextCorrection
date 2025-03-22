@@ -1,39 +1,40 @@
 import SwiftUI
+import Cocoa
 
-struct PreferencesWindow: View, @unchecked Sendable {
-    @AppStorage("OPENAI_API_KEY") private var apiKey: String = ""
-    @State private var tempApiKey: String = ""
-    @State private var showApiKeyInput: Bool = false
-
-    var body: some View {
-        VStack {
-            // ... 現有代碼 ...
-
-            if showApiKeyInput {
-                TextField("輸入OpenAI API金鑰", text: $tempApiKey)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding()
-
-                Button("儲存API金鑰") {
-                    apiKey = tempApiKey
-                    showApiKeyInput = false
-                }
-                .padding()
-            } else {
-                Text("API金鑰: \(apiKey.isEmpty ? "未設置" : "已設置")")
-                    .padding()
-
-                Button("更改API金鑰") {
-                    showApiKeyInput = true
-                    tempApiKey = apiKey
-                }
-                .padding()
-            }
-
-            // ... 現有代碼 ...
+// 簡化的PreferencesWindow類，僅用作轉發到AppKitBridge
+class PreferencesWindow: NSWindowController {
+    private var isPresented: Binding<Bool>
+    
+    init(isPresented: Binding<Bool>) {
+        self.isPresented = isPresented
+        
+        // 創建一個空窗口 - 實際上不會使用這個窗口
+        let window = NSWindow(
+            contentRect: NSRect.zero,
+            styleMask: [],
+            backing: .buffered,
+            defer: true
+        )
+        
+        super.init(window: window)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    // 重寫showWindow直接使用AppKitBridge
+    override func showWindow(_ sender: Any?) {
+        // 不調用super.showWindow，而是使用AppKitBridge
+        AppKitBridge.shared.showSettingsWindow()
+        
+        // 直接更新綁定值
+        DispatchQueue.main.async {
+            self.isPresented.wrappedValue = false
         }
-        .onAppear {
-            showApiKeyInput = apiKey.isEmpty
-        }
+    }
+    
+    deinit {
+        // 不需要做任何清理
     }
 }

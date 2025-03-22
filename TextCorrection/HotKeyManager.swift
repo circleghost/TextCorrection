@@ -76,13 +76,13 @@ class HotKeyManager: @unchecked Sendable {
         
         // 使用計時器定期檢查設定的變化，以防萬一
         Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
+                guard let self = self else { return }
+                
             // 檢查當前熱鍵狀態
             let isActive = AppState.shared.isHotkeyActive
             
             // 如果應該啟用但熱鍵為空，則設置熱鍵
-            if isActive && self.hotKey == nil {
+                if isActive && self.hotKey == nil {
                 DispatchQueue.main.async {
                     self.logger.debug("計時器檢測到熱鍵應啟用但未設置，重新設置熱鍵")
                     self.setupHotKey()
@@ -202,7 +202,7 @@ class HotKeyManager: @unchecked Sendable {
         // 設置熱鍵
         logger.info("註冊熱鍵: \(keyModifiers.rawValue) + \(keyString)")
         
-        if keyString.count == 1, let firstChar = keyString.first {
+        if keyString.count == 1, let _ = keyString.first {
             // 將字元轉換為Key類型
             let key = keyStringToKey(keyString)
             hotKey = HotKey(key: key, modifiers: keyModifiers)

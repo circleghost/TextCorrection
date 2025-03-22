@@ -1,15 +1,10 @@
----
-description: 
-globs: 
-alwaysApply: false
----
 # TextCorrection 專案規則
 
 ## 專案概述
 
 TextCorrection 是一個 macOS 應用程式，用於自動糾正與提升中文文本質量。透過 OpenAI API 分析並優化文本，特別關注繁體中文的語法、標點和格式。
 
-**重要：本專案正在進行架構遷移，從 AppKit (Cocoa) 逐步改版至 SwiftUI。請在開發時優先考慮使用 SwiftUI 實現新功能，並逐步替換現有的 AppKit 元素。**
+**重要：本專案正在進行架構遷移，從 AppKit (Cocoa) 逐步改版至 SwiftUI。請在開發時優先考慮使用 SwiftUI 實現新功能，並逐步替換現有的 AppKit 元素。同時保留AppKit處理系統層面功能的優勢。**
 
 ## 系統架構
 
@@ -20,6 +15,22 @@ TextCorrection 是一個 macOS 應用程式，用於自動糾正與提升中文�
 - **TextWindowManager**: 管理文本處理窗口的創建和顯示
 - **OpenAIService**: 負責與 OpenAI API 交互
 - **TextProcessing**: 處理文本對比和差異高亮顯示
+
+### 混合架構開發原則
+
+1. **分工明確**：
+   - AppKit負責系統層面功能：如剪貼板監控、熱鍵管理、系統權限
+   - SwiftUI負責UI元素：設定界面、提示窗口、用戶交互元素
+
+2. **通信機制**：
+   - 使用ObservableObject和EnvironmentObject在SwiftUI中管理狀態
+   - 使用回調或代理在AppKit和SwiftUI組件之間傳遞事件
+   - 避免直接在SwiftUI中調用AppKit方法
+
+3. **模塊化設計**：
+   - 每個功能模塊應該有明確的界限
+   - 盡量減少跨模塊依賴
+   - 使用依賴注入而非單例模式
 
 ## 編碼規範
 
@@ -56,6 +67,43 @@ TextCorrection 是一個 macOS 應用程式，用於自動糾正與提升中文�
 - 確保文本差異對比易於識別（用顏色和樣式）
 - 支援深色模式
 
+### Linear App 風格設計指南
+
+1. **配色方案**：
+   - 主色調：深藍色 (#0366D6)
+   - 次要色調：淺灰 (#F5F5F5)
+   - 強調色：鮮藍 (#2188FF)
+   - 警示色：紅色 (#D73A49)
+   - 成功色：綠色 (#28A745)
+
+2. **字體選擇**：
+   - 主要字體：SF Pro (系統字體)
+   - 標題大小：18-24pt
+   - 正文大小：14pt
+   - 次要文字：12pt
+   - 標題使用Medium或Bold字重
+   - 正文使用Regular字重
+
+3. **間距和佈局**：
+   - 統一使用8pt倍數的間距系統
+   - 基本元素內邊距：16pt
+   - 視窗邊距：20pt
+   - 相關元素群組間距：24pt
+   - 不相關元素群組間距：32pt
+
+4. **元素設計**：
+   - 按鈕圓角：6pt
+   - 輸入框圓角：6pt
+   - 卡片圓角：8pt
+   - 陰影效果：輕量級，偏移(0, 2)，模糊5pt，透明度10%
+   - 視窗尺寸：寬度至少400pt，根據內容適應高度
+
+5. **動效指南**：
+   - 使用輕微彈性曲線(spring)的動畫
+   - 按鈕hover效果：輕微縮放(1.02)和背景顏色變化
+   - 狀態切換動畫：使用.easeInOut, 0.2秒
+   - 錯誤提示動畫：輕微振動效果
+
 ## SwiftUI 編碼規範
 
 ### 視圖結構
@@ -87,4 +135,223 @@ TextCorrection 是一個 macOS 應用程式，用於自動糾正與提升中文�
 
 - API 密鑰應存儲在 Keychain 中
 - 用戶數據應適當保護
-- 注意處理敏感信息的方式 
+- 注意處理敏感信息的方式
+
+## 應用程式穩定性規則
+
+### 防止SIGABRT錯誤 (Signal Abort)
+
+我們的應用經常出現 "Thread 10: signal SIGABRT" 錯誤，這通常是由於以下原因：
+
+1. **強制解包nil值 (強制展開Optional)**：
+   - ❌ 避免使用 `!` 強制解包，除非100%確定值不為nil
+   - ✅ 使用 `if let`、`guard let` 或 `optional chaining (?.)` 安全訪問Optional值
+   - ✅ 對於UI元素的存取，總是檢查 `superview != nil` 確保視圖仍在層次結構中
+
+2. **視圖層次結構安全訪問**：
+   - ❌ 避免假設視圖始終存在於視圖層次結構中
+   - ✅ 在操作視圖前先檢查 `view.superview != nil`
+   - ✅ 在訪問子視圖前先確認 `view.subviews.count > 0`
+
+3. **安全設置CALayer屬性**：
+   - ❌ 避免直接設置Layer屬性，如 `view.layer.backgroundColor`
+   - ✅ 先檢查 `view.wantsLayer` 是否為 `true`
+   - ✅ 使用可選鏈安全訪問：`view.layer?.backgroundColor`
+
+4. **使用錯誤處理機制**：
+   - ❌ 避免在關鍵操作中沒有錯誤處理
+   - ✅ 使用 `do-catch` 包裝可能失敗的操作
+   - ✅ 自定義安全版本的方法，使用 `throws` 顯式處理錯誤
+
+### 視窗元素管理最佳實踐
+
+當處理視窗和視圖元素時：
+
+1. **視窗存在性檢查**：
+   ```swift
+   guard let window = appDelegate.textWindow, window.isVisible else {
+       // 安全地處理窗口不存在或不可見的情況
+       return
+   }
+   ```
+
+2. **定時器安全管理**：
+   ```swift
+   // 啟動定時器前先停止現有定時器
+   timer?.invalidate()
+   timer = nil
+   
+   // 在定時器內添加錯誤捕獲
+   timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+       do {
+           // 操作...
+       } catch {
+           // 錯誤處理，必要時停止定時器
+           self?.timer?.invalidate()
+           self?.timer = nil
+       }
+   }
+   ```
+
+3. **弱引用防止循環引用**：
+   ```swift
+   // 使用 [weak self] 避免在閉包中造成循環引用
+   NotificationCenter.default.addObserver(forName: name, object: object, queue: queue) { [weak self] _ in
+       guard let self = self else { return }
+       // 操作...
+   }
+   ```
+
+4. **Layer安全操作**：
+   ```swift
+   // 正確設置層屬性
+   if view.wantsLayer && view.layer?.backgroundColor == nil {
+       view.layer?.backgroundColor = NSColor.red.cgColor
+   }
+   ```
+
+## 視圖層次結構調試提示
+
+當遇到 SIGABRT 崩潰時：
+
+1. 檢查崩潰線程的堆棧追蹤
+2. 尋找最後操作的視圖元素
+3. 確認該元素是否還在視圖層次結構中
+4. 使用 `po view.superview` 在調試控制台驗證父視圖
+5. 添加日誌記錄關鍵操作步驟：
+   ```swift
+   Logger(subsystem: "com.yourcompany.TextCorrection", category: "Category")
+       .debug("操作說明: \(相關變量)")
+   ```
+
+## 總結
+
+- 始終添加防禦性編程，不假設任何UI元素一定存在
+- 使用try-catch和錯誤處理機制
+- 避免強制解包
+- 安全訪問視圖層次結構
+- 添加適當的日誌記錄以便調試
+
+以上規則將幫助我們防止應用程式中常見的SIGABRT崩潰。
+
+## 視窗頂部裝飾條設計規則
+
+為確保視窗頂部裝飾條的穩定性和一致性，我們制定以下規則：
+
+### 1. 視覺設計規範
+
+1. **三色條紋設計**：
+   ```swift
+   // 標準顏色定義
+   let redColor = NSColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.9)
+   let yellowColor = NSColor(red: 0.95, green: 0.75, blue: 0.1, alpha: 0.9)
+   let greenColor = NSColor(red: 0.2, green: 0.8, blue: 0.2, alpha: 0.9)
+   ```
+
+2. **尺寸規範**：
+   - 條紋高度：5pt
+   - 每個顏色條寬度：窗口寬度的1/3
+   - 頂部容器高度：33pt
+
+3. **字體規範**：
+   - 統一使用粉圓體
+   - 按鈕和標籤字體大小：13pt
+   - 標題字體大小：15pt
+
+### 2. 技術實現規範
+
+1. **資源釋放原則**：
+   ```swift
+   deinit {
+       // 直接在deinit中清理資源，不使用閉包
+       timer?.invalidate()
+       timer = nil
+       // 清理其他資源...
+   }
+   ```
+
+2. **視圖更新機制**：
+   ```swift
+   // 使用定時器確保頂部裝飾條可見性
+   private func setupTopBarTimer() {
+       topBarFixTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+           Task { @MainActor in
+               self?.updateTopBarVisibilityAsync()
+           }
+       }
+   }
+   ```
+
+3. **錯誤處理**：
+   ```swift
+   private func safeUpdateTopColorBar() throws {
+       guard let window = appDelegate?.textWindow,
+             let topBarView = self.topBarView,
+             topBarView.wantsLayer else {
+           throw NSError(domain: "TextWindowManager",
+                        code: 100,
+                        userInfo: [NSLocalizedDescriptionKey: "無法更新頂部條紋：組件不完整"])
+       }
+       // 更新實現...
+   }
+   ```
+
+### 3. 安全性規範
+
+1. **視圖層次檢查**：
+   ```swift
+   private func ensureTopBarVisible() {
+       guard let contentView = window.contentView else { return }
+       
+       if topContainer.superview == nil {
+           contentView.addSubview(topContainer)
+           // 重新設置約束...
+       }
+   }
+   ```
+
+2. **定時器管理**：
+   ```swift
+   // 定時器啟動前檢查
+   private func startTopBarTimer() {
+       stopTopBarTimer() // 先停止現有定時器
+       setupTopBarTimer() // 再啟動新定時器
+   }
+   
+   private func stopTopBarTimer() {
+       topBarFixTimer?.invalidate()
+       topBarFixTimer = nil
+   }
+   ```
+
+3. **視圖更新安全檢查**：
+   ```swift
+   private func updateTopBarVisibility() {
+       guard let window = appDelegate?.textWindow,
+             window.isVisible,
+             let contentView = window.contentView else {
+           stopTopBarTimer() // 如果條件不滿足，停止定時器
+           return
+       }
+       // 更新實現...
+   }
+   ```
+
+### 4. 維護建議
+
+1. **定期檢查**：
+   - 確保三色條紋顯示正常
+   - 驗證定時器是否正常工作
+   - 檢查資源釋放是否完整
+
+2. **效能優化**：
+   - 避免頻繁更新視圖層次
+   - 合理設置定時器間隔
+   - 及時清理不需要的觀察者
+
+3. **調試支持**：
+   - 添加關鍵點日誌
+   - 使用條件斷點檢查視圖狀態
+   - 監控內存使用情況
+
+遵循以上規則，可以確保視窗頂部裝飾條的穩定性和可維護性。 

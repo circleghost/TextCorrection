@@ -1,0 +1,4 @@
+module Magnet {
+header "Magnet-Swift.h"
+export *
+}

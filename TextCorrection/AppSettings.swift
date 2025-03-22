@@ -1,88 +1,117 @@
 import Foundation
+import Combine
+import os.log
 
-// AppSettings 類別用於管理應用程式設定
-class AppSettings {
-    private static let userDefaults = UserDefaults.standard
+/// 應用程序設置類
+class AppSettings: ObservableObject {
+    /// 單例實例
+    static let shared = AppSettings()
     
-    // 設定鍵常量
-    private struct Keys {
-        static let visualEffectsEnabled = "visualEffectsEnabled"
-        static let particleEffectsEnabled = "particleEffectsEnabled"
-        static let animationsEnabled = "animationsEnabled"
-        static let highQualityEffects = "highQualityEffects"
+    /// 發布者（用於通知設置變更）
+    let objectWillChange = PassthroughSubject<Void, Never>()
+    
+    // 日誌記錄器
+    private let logger = Logger(subsystem: "com.text.correction", category: "AppSettings")
+    
+    /// 用戶默認值鍵名常量
+    private enum UserDefaultsKeys {
+        static let ignoreWords = "ignore_words"
+        static let textSizeLimit = "text_size_limit"
+        static let autoCorrect = "auto_correct"
+        static let startAtLogin = "start_at_login"
     }
     
-    // 視覺特效啟用狀態
-    static var visualEffectsEnabled: Bool {
+    /// 忽略字詞列表
+    var ignoreWords: [String] {
         get {
-            // 預設為啟用
-            if userDefaults.object(forKey: Keys.visualEffectsEnabled) == nil {
+            return UserDefaults.standard.stringArray(forKey: UserDefaultsKeys.ignoreWords) ?? []
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.ignoreWords)
+        }
+    }
+    
+    /// 文本大小限制（單位：字符）
+    var textSizeLimit: Int {
+        get {
+            return UserDefaults.standard.integer(forKey: UserDefaultsKeys.textSizeLimit)
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.textSizeLimit)
+        }
+    }
+    
+    /// 是否自動糾正
+    var autoCorrect: Bool {
+        get {
+            // 如果設置不存在，默認為true
+            if UserDefaults.standard.object(forKey: UserDefaultsKeys.autoCorrect) == nil {
                 return true
             }
-            return userDefaults.bool(forKey: Keys.visualEffectsEnabled)
+            return UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoCorrect)
         }
         set {
-            userDefaults.set(newValue, forKey: Keys.visualEffectsEnabled)
-            NotificationCenter.default.post(name: .visualEffectsSettingChanged, object: newValue)
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.autoCorrect)
         }
     }
     
-    // 粒子特效啟用狀態
-    static var particleEffectsEnabled: Bool {
+    /// 是否開機啟動
+    var startAtLogin: Bool {
         get {
-            // 預設為啟用
-            if userDefaults.object(forKey: Keys.particleEffectsEnabled) == nil {
-                return true
-            }
-            return userDefaults.bool(forKey: Keys.particleEffectsEnabled)
+            return UserDefaults.standard.bool(forKey: UserDefaultsKeys.startAtLogin)
         }
         set {
-            userDefaults.set(newValue, forKey: Keys.particleEffectsEnabled)
-            NotificationCenter.default.post(name: .visualEffectsSettingChanged, object: newValue)
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.startAtLogin)
+            configureStartAtLogin(newValue)
         }
     }
     
-    // 動畫特效啟用狀態
-    static var animationsEnabled: Bool {
-        get {
-            // 預設為啟用
-            if userDefaults.object(forKey: Keys.animationsEnabled) == nil {
-                return true
-            }
-            return userDefaults.bool(forKey: Keys.animationsEnabled)
+    /// 私有初始化方法
+    private init() {
+        // 設置默認值（如果尚未設置）
+        if UserDefaults.standard.object(forKey: UserDefaultsKeys.textSizeLimit) == nil {
+            textSizeLimit = 5000 // 默認限制為5000字符
         }
-        set {
-            userDefaults.set(newValue, forKey: Keys.animationsEnabled)
-            NotificationCenter.default.post(name: .visualEffectsSettingChanged, object: newValue)
-        }
-    }
-    
-    // 高品質特效啟用狀態
-    static var highQualityEffects: Bool {
-        get {
-            // 預設為啟用，但會檢查設備性能
-            let shouldEnableByDefault = !ProcessInfo.processInfo.isLowPowerModeEnabled && 
-                                       ProcessInfo.processInfo.processorCount >= 4
-            if userDefaults.object(forKey: Keys.highQualityEffects) == nil {
-                return shouldEnableByDefault
-            }
-            return userDefaults.bool(forKey: Keys.highQualityEffects)
-        }
-        set {
-            userDefaults.set(newValue, forKey: Keys.highQualityEffects)
-            NotificationCenter.default.post(name: .visualEffectsSettingChanged, object: newValue)
-        }
-    }
-    
-    // 重置所有設定為預設值
-    static func resetToDefaults() {
-        userDefaults.removeObject(forKey: Keys.visualEffectsEnabled)
-        userDefaults.removeObject(forKey: Keys.particleEffectsEnabled)
-        userDefaults.removeObject(forKey: Keys.animationsEnabled)
-        userDefaults.removeObject(forKey: Keys.highQualityEffects)
         
-        // 通知設定變更
-        NotificationCenter.default.post(name: .visualEffectsSettingChanged, object: nil)
+        if UserDefaults.standard.object(forKey: UserDefaultsKeys.startAtLogin) == nil {
+            startAtLogin = false // 默認不開機啟動
+        }
+        
+        logger.debug("AppSettings初始化完成")
+    }
+    
+    /// 添加忽略字詞
+    func addIgnoreWord(_ word: String) {
+        if !ignoreWords.contains(word) {
+            var updatedList = ignoreWords
+            updatedList.append(word)
+            ignoreWords = updatedList
+            logger.debug("已添加忽略字詞: \(word)")
+        }
+    }
+    
+    /// 刪除忽略字詞
+    func removeIgnoreWord(_ word: String) {
+        if let index = ignoreWords.firstIndex(of: word) {
+            var updatedList = ignoreWords
+            updatedList.remove(at: index)
+            ignoreWords = updatedList
+            logger.debug("已刪除忽略字詞: \(word)")
+        }
+    }
+    
+    /// 配置是否開機啟動
+    private func configureStartAtLogin(_ enable: Bool) {
+        // 這裡使用 SMLoginItemSetEnabled 來設置開機啟動
+        // 注意：這需要創建一個單獨的 LoginItem 幫助程序應用
+        // 在完整實現中，你需要使用 ServiceManagement 框架
+        // 或者使用現代的 SMAppService API
+        // 但由於我們簡化起見，這裡先不具體實現
+        logger.debug("配置開機啟動: \(enable ? "啟用" : "禁用")")
     }
 }
 

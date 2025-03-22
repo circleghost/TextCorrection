@@ -164,6 +164,11 @@ class PasteboardManager: @unchecked Sendable {
             if clipboardString.count > 5 {
                 // 使用AppDelegate顯示浮動按鈕
                 self?.appDelegate?.showFloatingButton()
+                
+                // 發送系統通知，告知用戶檢測到可校正的文本
+                if clipboardString.count > 20 && !isSameAsLast {  // 避免對太短或重複的文本發送通知
+                    NotificationManager.shared.sendClipboardDetectedNotification(textLength: clipboardString.count)
+                }
             }
         }
     }

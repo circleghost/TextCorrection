@@ -17,10 +17,11 @@ private enum UIConstants {
     static let dangerColor = Color(hex: "D73A49")
     static let successColor = Color(hex: "28A745")
     
-    static let titleFont = Font.system(size: 24, weight: .bold)
-    static let sectionFont = Font.system(size: 16, weight: .semibold)
-    static let bodyFont = Font.system(size: 14, weight: .regular)
-    static let captionFont = Font.system(size: 12, weight: .regular)
+    static let titleFont = Font.pungyu(size: 24, weight: .bold)
+    static let sectionFont = Font.pungyu(size: 16, weight: .semibold)
+    static let sectionHeaderFont = Font.pungyu(size: 14, weight: .semibold)
+    static let bodyFont = Font.pungyu(size: 14, weight: .regular)
+    static let captionFont = Font.pungyu(size: 12, weight: .regular)
 }
 
 extension Color {
@@ -161,6 +162,7 @@ struct SettingsView: View, @unchecked Sendable {
     @State private var tempModifiers: [String] = []
     @State private var tempCharacter: String = ""
     @State private var isValidating: Bool = false
+    @StateObject private var appSettings = AppSettings.shared
     
     // 使用 AppState 進行狀態管理
     @EnvironmentObject private var appState: AppState
@@ -177,13 +179,13 @@ struct SettingsView: View, @unchecked Sendable {
     var body: some View {
         VStack(spacing: 0) {
             // 頂部標題區域
-            HStack {
+                            HStack {
                 Text("TextCorrection 設定")
                     .font(UIConstants.titleFont)
                     .foregroundColor(.primary)
-                
-                Spacer()
-                
+                                
+                                Spacer()
+                                
                 Button(action: {
                     dismiss()
                 }) {
@@ -229,27 +231,27 @@ struct SettingsView: View, @unchecked Sendable {
             
             // 底部版本資訊和重置按鈕
             HStack {
-                Button(action: {
-                    logger.debug("重置設定按鈕被點擊")
-                    appState.resetSettings()
-                    showSuccessMessage("所有設定已重置")
-                }) {
-                    Text("重置所有設定")
-                        .font(UIConstants.bodyFont)
-                }
+            Button(action: {
+                logger.debug("重置設定按鈕被點擊")
+                appState.resetSettings()
+                showSuccessMessage("所有設定已重置")
+            }) {
+                Text("重置所有設定")
+                            .font(UIConstants.bodyFont)
+            }
                 .buttonStyle(LinearButtonStyle(isPrimary: false, isDanger: true))
                 
                 Spacer()
-                
-                HStack {
-                    Text("TextCorrection")
-                        .font(UIConstants.captionFont.weight(.medium))
-                    Text("版本 1.0")
-                        .font(UIConstants.captionFont)
-                        .foregroundColor(.gray)
-                }
+            
+            HStack {
+                Text("TextCorrection")
+                            .font(UIConstants.captionFont.weight(.medium))
+                Text("版本 1.0")
+                            .font(UIConstants.captionFont)
+                    .foregroundColor(.gray)
             }
-            .padding(UIConstants.spacing)
+                }
+                .padding(UIConstants.spacing)
         }
         .frame(width: UIConstants.windowWidth, height: UIConstants.windowHeight)
         .background(Color(NSColor.windowBackgroundColor))
@@ -257,6 +259,18 @@ struct SettingsView: View, @unchecked Sendable {
             logger.debug("SettingsView 出現")
             loadApiKey()
             updateWindowState(isOpen: true)
+            
+            // 如果 API 金鑰無效，自動切換到 API 設定頁面
+            if !appState.isApiKeyValid {
+                selectedTab = 1
+                
+                // 如果 API 金鑰為空，顯示一個提示訊息
+                if apiKey.isEmpty {
+                    message = "請設定 OpenAI API 金鑰以啟用文字校正功能"
+                    isSuccess = false
+                    showMessage = true
+                }
+            }
         })
         .onDisappear {
             logger.debug("SettingsView 消失")
@@ -366,6 +380,29 @@ struct SettingsView: View, @unchecked Sendable {
                 }
                 .cardStyle()
             }
+            
+            // 應用程式設定
+            Section(header: Text("系統設定").font(UIConstants.sectionHeaderFont)) {
+                VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+                    Toggle("隨系統開機啟動", isOn: $appSettings.startAtLogin)
+                        .toggleStyle(LinearToggleStyle())
+                    
+                    Text("應用程式將在系統啟動時自動啟動")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.bottom, 8)
+                
+                VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+                    Toggle("自動糾正文字", isOn: $appSettings.autoCorrect)
+                        .toggleStyle(LinearToggleStyle())
+                    
+                    Text("在輸入時自動檢測和修正錯別字")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .cardStyle()
         }
         .sheet(isPresented: $showHotkeyCustomizationSheet) {
             hotkeyCustomizationView
@@ -374,77 +411,110 @@ struct SettingsView: View, @unchecked Sendable {
     
     // API設定視圖
     private var apiSettingsView: some View {
-        VStack(alignment: .leading, spacing: UIConstants.groupSpacing) {
-            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+        VStack(alignment: .leading, spacing: UIConstants.spacing) {
+            // API 金鑰配置區域
+            VStack(alignment: .leading, spacing: UIConstants.spacing) {
                 Text("OpenAI API 設定")
                     .font(UIConstants.sectionFont)
                     .padding(.horizontal, UIConstants.spacing)
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("API 金鑰")
                             .font(UIConstants.bodyFont.weight(.medium))
                         
+                        // API 金鑰輸入框，使用安全字段
+                        SecureField("輸入你的 OpenAI API 金鑰", text: $apiKey)
+                            .font(.system(.body, design: .monospaced))
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .disableAutocorrection(true)
+                            .padding(.bottom, 4)
+                        
                         HStack {
-                            SecureField("輸入 OpenAI API 金鑰", text: $apiKey)
-                                .textFieldStyle(PlainTextFieldStyle())
-                                .font(UIConstants.bodyFont)
-                                .padding(12)
-                                .background(Color(NSColor.textBackgroundColor))
-                                .cornerRadius(UIConstants.cornerRadius)
-                            
-                            Button(action: saveApiKey) {
-                                HStack {
-                                    if isSaving {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                            .frame(width: 16, height: 16)
-                                    }
-                                    Text("儲存")
+                            // 添加 OpenAI API 網站連結
+                            Link(destination: URL(string: "https://platform.openai.com/api-keys")!) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "link")
+                                        .font(.system(size: 12))
+                                    Text("前往 OpenAI API 頁面申請")
+                                        .font(UIConstants.captionFont)
+                                        .underline()
                                 }
+                                .foregroundColor(UIConstants.primaryColor)
                             }
-                            .buttonStyle(LinearButtonStyle())
-                            .disabled(isSaving || apiKey.isEmpty)
+                            
+                            Spacer()
                         }
                     }
                     
-                    HStack {
-                        Button(action: validateApiKey) {
-                            Text("驗證 API 金鑰")
+                    // 直接前往 OpenAI 網站的按鈕
+                    Button(action: {
+                        if let url = URL(string: "https://platform.openai.com/api-keys") {
+                            NSWorkspace.shared.open(url)
                         }
-                        .buttonStyle(LinearButtonStyle(isPrimary: false))
-                        .disabled(isSaving || apiKey.isEmpty)
+                    }) {
+                        HStack {
+                            Image(systemName: "safari")
+                            Text("在瀏覽器中開啟 OpenAI API 申請頁面")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(LinearButtonStyle(isPrimary: false))
+                    .padding(.bottom, 10)
+                    
+                    // 金鑰驗證按鈕
+                    HStack {
+                        Button(action: {
+                            validateApiKey()
+                        }) {
+                            HStack {
+                                Image(systemName: isValidating ? "circle.dashed" : "checkmark.seal")
+                                    .rotationEffect(isValidating ? .degrees(0) : .degrees(0))
+                                    .animation(isValidating ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isValidating)
+                                
+                                Text(isValidating ? "驗證中..." : "驗證 API 金鑰")
+                            }
+                        }
+                        .buttonStyle(LinearButtonStyle())
+                        .disabled(apiKey.isEmpty || isValidating)
                         
                         Spacer()
                         
-                        HStack(spacing: UIConstants.spacing / 2) {
-                            Circle()
-                                .fill(appState.isApiKeyValid ? UIConstants.successColor : UIConstants.dangerColor)
-                                .frame(width: 10, height: 10)
-                            
-                            Text(appState.isApiKeyValid ? "API 金鑰已驗證" : "API 金鑰未驗證")
-                                .font(UIConstants.captionFont)
-                                .foregroundColor(appState.isApiKeyValid ? UIConstants.successColor : UIConstants.dangerColor)
+                        Button(action: {
+                            saveApiKey()
+                        }) {
+                            HStack {
+                                Image(systemName: "checkmark.circle")
+                                Text("儲存")
+                            }
                         }
+                        .buttonStyle(LinearButtonStyle())
+                        .disabled(apiKey.isEmpty || isValidating)
                     }
-                    .padding(.top, 8)
                     
-                    Divider()
-                        .padding(.vertical, 8)
-                    
-                    Text("API 金鑰安全儲存在 macOS 系統鑰匙圈(Keychain)中，即使應用程式關閉也不會丟失。")
-                        .font(UIConstants.captionFont)
-                        .foregroundColor(.secondary)
+                    // 驗證訊息顯示
+                    if showMessage {
+                        Text(message)
+                            .font(UIConstants.captionFont)
+                            .foregroundColor(isSuccess ? UIConstants.successColor : UIConstants.dangerColor)
+                            .padding(.top, 4)
+                    }
                 }
-                .cardStyle()
-                
-                Text("OpenAI API 金鑰用於訪問 OpenAI 的文本處理服務，需要有效的 API 金鑰才能使用文本校正功能。")
-                    .font(UIConstants.captionFont)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, UIConstants.spacing)
-                    .padding(.top, 4)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(NSColor.controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .padding(.horizontal, UIConstants.spacing)
             }
+            
+            Spacer()
         }
+        .padding(.bottom, UIConstants.spacing)
     }
     
     // 進階設定視圖
@@ -488,6 +558,29 @@ struct SettingsView: View, @unchecked Sendable {
                         Text("高品質效果")
                     }
                     .toggleStyle(LinearToggleStyle())
+                }
+                .cardStyle()
+            }
+            
+            // 通知設定
+            VStack(alignment: .leading, spacing: UIConstants.spacing / 2) {
+                Text("通知設定")
+                    .font(UIConstants.sectionFont)
+                    .padding(.horizontal, UIConstants.spacing)
+                
+                VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                    Toggle(isOn: Binding(
+                        get: { NotificationManager.shared.isNotificationsEnabled },
+                        set: { NotificationManager.shared.isNotificationsEnabled = $0 }
+                    )) {
+                        Text("啟用系統通知")
+                    }
+                    .toggleStyle(LinearToggleStyle())
+                    
+                    Text("控制應用程式是否顯示校正完成、錯誤等系統通知")
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
                 .cardStyle()
             }
@@ -815,4 +908,4 @@ struct SettingsView: View, @unchecked Sendable {
 #Preview {
     SettingsView()
         .environmentObject(AppState.shared)
-}
+} 
