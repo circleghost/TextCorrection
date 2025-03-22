@@ -1,3 +1,4 @@
+<!-- Start of Selection -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -24,5 +25,10 @@
 	<string></string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string> <!-- 添加應用程式類別 -->
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0.0</string>
 </dict>
 </plist>
+<!-- End of Selection -->
