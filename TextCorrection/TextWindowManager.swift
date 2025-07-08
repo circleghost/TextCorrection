@@ -614,28 +614,18 @@ class TextWindowManager: ObservableObject {
         // 確保文字視圖可以接收滑鼠事件，允許文字選取
         textView.isSelectable = true
 
-        // 先在文字視窗中顯示原始文字，讓用戶立即看到內容
-        let initialAttributedString = NSMutableAttributedString(string: text)
-        initialAttributedString.addAttributes([
-            .font: getPungyuFont(size: 26),
-            .foregroundColor: NSColor.white
-        ], range: NSRange(location: 0, length: text.count))
-        
-        textView.textStorage?.setAttributedString(initialAttributedString)
-        
-        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-            .info("[創建窗口] 已顯示原始文字，字數: \(text.count)")
-        
-        // 添加處理狀態提示
-        let processingText = "\n\n⏳ 正在進行文字校正，請稍候..."
+        // 先顯示處理中狀態，不要立即顯示原始文字
+        let processingText = "⏳ 正在進行文字校正，請稍候..."
         let processingString = NSMutableAttributedString(string: processingText)
         processingString.addAttributes([
-            .font: getPungyuFont(size: 20),
+            .font: getPungyuFont(size: 24),
             .foregroundColor: NSColor.systemYellow
         ], range: NSRange(location: 0, length: processingText.count))
         
-        initialAttributedString.append(processingString)
-        textView.textStorage?.setAttributedString(initialAttributedString)
+        textView.textStorage?.setAttributedString(processingString)
+        
+        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+            .info("[創建窗口] 已顯示處理中狀態")
 
         // 開始重寫
         appDelegate.rewriteText()
@@ -1414,90 +1404,24 @@ class TextWindowManager: ObservableObject {
                 return
             }
             
-            // 使用 autoreleasepool 降低內存壓力
-            autoreleasepool {
-                // 保存目前的滾動位置
-                let visibleRect = scrollView.contentView.bounds
-                let wasAtBottom = (visibleRect.maxY >= scrollView.documentView?.bounds.maxY ?? 0)
-                
-                // 分批設置屬性字符串，避免一次設置過大的文本導致UI卡頓
-                let chunkSize = 50000 // 設置為每段50K個字符
-                
-                if attributedString.length > chunkSize {
-                    // 對於大型文本，分批處理
-                    Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                        .info("處理大型文本 (\(attributedString.length) 字符)，使用分批處理")
-                    
-                    // 清空現有內容並設置字體和段落樣式
-                    let paragraphStyle = NSMutableParagraphStyle()
-                    paragraphStyle.lineSpacing = 12
-                    paragraphStyle.paragraphSpacing = 16
-                    paragraphStyle.lineBreakMode = .byWordWrapping
-                    
-                    let emptyAttributedString = NSAttributedString(
-                        string: "",
-                        attributes: [
-                            .font: self.getPungyuFont(size: 22),
-                            .foregroundColor: NSColor.white,
-                            .paragraphStyle: paragraphStyle
-                        ]
-                    )
-                    
-                    // 安全地設置空字符串作為初始內容
-                    textView.textStorage?.beginEditing()
-                    textView.textStorage?.setAttributedString(emptyAttributedString)
-                    textView.textStorage?.endEditing()
-                    
-                    // 分批添加內容
-                    let totalRange = NSRange(location: 0, length: attributedString.length)
-                    var currentLocation = 0
-                    
-                    while currentLocation < totalRange.length {
-                        let batchLength = min(chunkSize, totalRange.length - currentLocation)
-                        let batchRange = NSRange(location: currentLocation, length: batchLength)
-                        
-                        // 提取當前批次的文本
-                        let batchAttributedString = attributedString.attributedSubstring(from: batchRange)
-                        
-                        // 安全地添加到文本存儲
-                        textView.textStorage?.beginEditing()
-                        textView.textStorage?.append(batchAttributedString)
-                        textView.textStorage?.endEditing()
-                        
-                        // 更新當前位置
-                        currentLocation += batchLength
-                        
-                        // 每批次後讓UI更新一下
-                        window.update()
-                        
-                        // 讓系統處理一下其他任務，避免UI完全卡死
-                        // 使用同步方式短暫延遲，避免使用異步操作
-                        Thread.sleep(forTimeInterval: 0.001) // 1ms
-                    }
-                } else {
-                    // 小型文本，直接設置
-                    textView.textStorage?.beginEditing()
-                    textView.textStorage?.setAttributedString(attributedString)
-                    textView.textStorage?.endEditing()
-                    
-                    // 如果設置失敗，使用備用方法
-                    if textView.textStorage?.string != attributedString.string {
-                        textView.textStorage?.setAttributedString(attributedString)
-                    }
-                }
-                
-                // 恢復滾動位置
-                if wasAtBottom {
-                    textView.scrollToEndOfDocument(nil)
-                } else {
-                    scrollView.contentView.scroll(to: visibleRect.origin)
-                    scrollView.reflectScrolledClipView(scrollView.contentView)
-                }
-                
-                // 確保文本視圖可見並且窗口更新
-                textView.needsDisplay = true
-                window.update()
+            // 保存目前的滾動位置
+            let visibleRect = scrollView.contentView.bounds
+            let wasAtBottom = (visibleRect.maxY >= scrollView.documentView?.bounds.maxY ?? 0)
+            
+            // 使用真正的字符級文字流動效果
+            await self.animateTextStream(attributedString: attributedString, textView: textView, window: window)
+            
+            // 恢復滾動位置
+            if wasAtBottom {
+                textView.scrollToEndOfDocument(nil)
+            } else {
+                scrollView.contentView.scroll(to: visibleRect.origin)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
             }
+            
+            // 確保文本視圖可見並且窗口更新
+            textView.needsDisplay = true
+            window.update()
             
             // 更新統計信息
             updateStatisticsInfo(originalText: originalText, correctedText: newText)
@@ -2001,6 +1925,123 @@ class TextWindowManager: ObservableObject {
     @MainActor
     private func updateTopBarVisibilityAsync() {
         self.updateTopBarVisibility()
+    }
+
+    // 動畫文字流動效果
+    @MainActor
+    private func animateTextStream(attributedString: NSAttributedString, textView: NSTextView, window: NSWindow) async {
+        // 先預調整視窗大小以避免彈跳
+        await preResizeWindowForText(attributedString: attributedString, textView: textView, window: window)
+        
+        // 設置基本段落樣式
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 12
+        paragraphStyle.paragraphSpacing = 16
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        
+        // 清空現有內容
+        let emptyAttributedString = NSAttributedString(
+            string: "",
+            attributes: [
+                .font: self.getPungyuFont(size: 22),
+                .foregroundColor: NSColor.white,
+                .paragraphStyle: paragraphStyle
+            ]
+        )
+        
+        textView.textStorage?.beginEditing()
+        textView.textStorage?.setAttributedString(emptyAttributedString)
+        textView.textStorage?.endEditing()
+        
+        // 以較小的塊大小進行文字流動，創造真正的流動效果
+        let chunkSize = 1 // 每次添加1個字符
+        let streamDelay = 0.015 // 15ms間隔，可見的流動效果
+        
+        let totalLength = attributedString.length
+        var currentIndex = 0
+        
+        while currentIndex < totalLength {
+            let endIndex = min(currentIndex + chunkSize, totalLength)
+            let range = NSRange(location: currentIndex, length: endIndex - currentIndex)
+            let chunk = attributedString.attributedSubstring(from: range)
+            
+            // 添加字符到文本視圖
+            textView.textStorage?.beginEditing()
+            textView.textStorage?.append(chunk)
+            textView.textStorage?.endEditing()
+            
+            // 保持滾動到最底部
+            textView.scrollToEndOfDocument(nil)
+            
+            // 更新視窗
+            window.update()
+            
+            currentIndex = endIndex
+            
+            // 等待間隔
+            try? await Task.sleep(nanoseconds: UInt64(streamDelay * 1_000_000_000))
+        }
+        
+        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+            .info("文字流動完成，總字符數: \(totalLength)")
+    }
+    
+    // 預調整視窗大小以避免彈跳
+    @MainActor
+    private func preResizeWindowForText(attributedString: NSAttributedString, textView: NSTextView, window: NSWindow) async {
+        // 計算文字所需的高度
+        let textContainer = textView.textContainer
+        let _ = textView.layoutManager
+        
+        // 臨時計算文字高度
+        let tempTextStorage = NSTextStorage(attributedString: attributedString)
+        let tempLayoutManager = NSLayoutManager()
+        let tempTextContainer = NSTextContainer(size: textContainer?.size ?? NSSize.zero)
+        
+        tempTextStorage.addLayoutManager(tempLayoutManager)
+        tempLayoutManager.addTextContainer(tempTextContainer)
+        
+        // 計算所需高度
+        tempLayoutManager.glyphRange(for: tempTextContainer)
+        let textHeight = tempLayoutManager.usedRect(for: tempTextContainer).height
+        
+        // 加上內邊距和額外空間
+        let totalHeight = textHeight + textView.textContainerInset.height * 2 + 100
+        
+        // 獲取當前視窗框架
+        let currentFrame = window.frame
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect.zero
+        
+        // 計算新的視窗高度，但不超過螢幕高度的80%
+        let maxHeight = screenFrame.height * 0.8
+        let newHeight = min(totalHeight, maxHeight)
+        
+        // 如果高度變化顯著，則調整視窗大小
+        if abs(newHeight - currentFrame.height) > 50 {
+            let newFrame = NSRect(
+                x: currentFrame.origin.x,
+                y: currentFrame.origin.y + currentFrame.height - newHeight,
+                width: currentFrame.width,
+                height: newHeight
+            )
+            
+            // 平滑調整視窗大小
+            await withCheckedContinuation { continuation in
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.2
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    window.setFrame(newFrame, display: true, animate: true)
+                }) {
+                    continuation.resume()
+                }
+            }
+            
+            // 等待動畫完成
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
+            
+            Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+                .info("視窗預調整完成，新高度: \(newHeight)")
+        }
     }
 
     // 添加統一的統計信息更新方法
