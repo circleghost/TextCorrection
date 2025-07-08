@@ -223,7 +223,9 @@ struct TextCorrectionApp: App {
         
         // 如果工具菜單不存在，則添加到主菜單
         if mainMenu.item(withTitle: "工具") == nil {
-            mainMenu.insertItem(toolsMenuItem, at: mainMenu.items.count - 1)
+            // 確保索引不會是負數
+            let insertIndex = max(0, mainMenu.items.count - 1)
+            mainMenu.insertItem(toolsMenuItem, at: insertIndex)
         }
         
         // 確保主菜單被設置

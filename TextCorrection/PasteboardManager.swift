@@ -106,16 +106,18 @@ class PasteboardManager {
             let currentChangeCount = NSPasteboard.general.changeCount
             
             if currentChangeCount != self.lastPasteboardChangeCount {
-                self.lastPasteboardChangeCount = currentChangeCount
-                self.logger.info("檢測到剪貼板變化，新計數: \(currentChangeCount)")
-                
-                // 更新AppState中的剪貼板變更時間
-                AppState.shared.lastClipboardChangeTime = Date()
-                
-                // 為防止頻繁處理相同內容，使用延遲執行
+                // 使用 Task 確保在 MainActor 上執行
                 Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.lastPasteboardChangeCount = currentChangeCount
+                    self.logger.info("檢測到剪貼板變化，新計數: \(currentChangeCount)")
+                    
+                    // 更新AppState中的剪貼板變更時間
+                    AppState.shared.lastClipboardChangeTime = Date()
+                    
+                    // 為防止頻繁處理相同內容，使用延遲執行
                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 秒
-                    self?.checkCurrentClipboard()
+                    self.checkCurrentClipboard()
                 }
             }
         }
@@ -212,7 +214,10 @@ class PasteboardManager {
     
     // 清理資源
     deinit {
-        stopObserving()
+        // 在 deinit 中不能調用 @MainActor 方法，直接清理
+        isObserving = false
+        timer?.invalidate()
+        timer = nil
         cancellables.removeAll()
         NotificationCenter.default.removeObserver(self)
         logger.info("PasteboardManager 已釋放")

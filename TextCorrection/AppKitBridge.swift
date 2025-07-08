@@ -39,18 +39,22 @@ public class AppKitBridge: ObservableObject {
         logger.info("AppKitBridge 初始化")
         
         // 從AppState訂閱相關數據變化
-        setupSubscriptions()
+        Task { @MainActor in
+            setupSubscriptions()
+        }
     }
     
     /// 設置與AppState的訂閱關係
-    private func setupSubscriptions() {
+    @MainActor private func setupSubscriptions() {
         // 監聽TextProcessingStateChanged通知
         NotificationCenter.default.publisher(for: NSNotification.Name("TextProcessingStateChanged"))
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                let isProcessing = AppState.shared.isProcessing
-                self.isTextBeingProcessed = isProcessing
-                self.logger.debug("文本處理狀態更新: \(isProcessing)")
+                Task { @MainActor in
+                    let isProcessing = AppState.shared.isProcessing
+                    self.isTextBeingProcessed = isProcessing
+                    self.logger.debug("文本處理狀態更新: \(isProcessing)")
+                }
             }
             .store(in: &cancellables)
         

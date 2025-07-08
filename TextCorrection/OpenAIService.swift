@@ -75,10 +75,17 @@ actor OpenAIService {
     private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             guard let self = self else { return }
-            self.isNetworkAvailable = path.status == .satisfied
-            self.logger.debug("網路狀態更新: \(self.isNetworkAvailable ? "可用" : "不可用")")
+            Task { @MainActor in
+                await self.updateNetworkStatus(path.status == .satisfied)
+            }
         }
         networkMonitor.start(queue: networkQueue)
+    }
+    
+    // 更新網路狀態 - 在actor中執行
+    private func updateNetworkStatus(_ isAvailable: Bool) {
+        isNetworkAvailable = isAvailable
+        logger.debug("網路狀態更新: \(isAvailable ? "可用" : "不可用")")
     }
     
     deinit {

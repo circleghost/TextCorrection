@@ -547,7 +547,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     // 避免多餘的處理，如果 weakSelf 或應用程序已不存在
                     
                     // 檢查應用程序是否正在運行
-                    guard NSApp.isRunning else {
+                    guard await NSApp.isRunning else {
                         return
                     }
                     

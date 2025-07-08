@@ -10,7 +10,12 @@ class NotificationManager {
     /// 是否啟用通知功能
     var isNotificationsEnabled: Bool {
         get {
-            return UserDefaults.standard.bool(forKey: "isNotificationsEnabled", defaultValue: true)
+            // 檢查是否有儲存的設定，如果沒有則返回默認值 true
+            if UserDefaults.standard.object(forKey: "isNotificationsEnabled") != nil {
+                return UserDefaults.standard.bool(forKey: "isNotificationsEnabled")
+            } else {
+                return true
+            }
         }
         set {
             UserDefaults.standard.set(newValue, forKey: "isNotificationsEnabled")

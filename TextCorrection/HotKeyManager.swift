@@ -32,8 +32,11 @@ class HotKeyManager {
     }
     
     deinit {
-        cleanup()
-        logger.info("HotKeyManager 已釋放")
+        // 同步清理，避免MainActor問題
+        hotKey = nil
+        globalMonitor = nil
+        
+        // 不在deinit中使用logger，因為它是MainActor隔離的
         NotificationCenter.default.removeObserver(self)
     }
     
@@ -80,18 +83,16 @@ class HotKeyManager {
                 guard let self = self else { return }
                 
             // 檢查當前熱鍵狀態
-            let isActive = AppState.shared.isHotkeyActive
+            Task { @MainActor in
+                let isActive = AppState.shared.isHotkeyActive
             
-            // 如果應該啟用但熱鍵為空，則設置熱鍵
+                // 如果應該啟用但熱鍵為空，則設置熱鍵
                 if isActive && self.hotKey == nil {
-                DispatchQueue.main.async {
                     self.logger.debug("計時器檢測到熱鍵應啟用但未設置，重新設置熱鍵")
                     self.setupHotKey()
                 }
-            }
-            // 如果應該禁用但熱鍵不為空，則禁用熱鍵
-            else if !isActive && self.hotKey != nil {
-                DispatchQueue.main.async {
+                // 如果應該禁用但熱鍵不為空，則禁用熱鍵
+                else if !isActive && self.hotKey != nil {
                     self.logger.debug("計時器檢測到熱鍵應禁用但仍在設置，禁用熱鍵")
                     self.disableHotKey()
                 }

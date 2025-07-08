@@ -156,7 +156,7 @@ class AppState: ObservableObject {
         // 載入熱鍵設定
         if defaults.object(forKey: "isHotkeyActive") != nil {
             isHotkeyActive = defaults.bool(forKey: "isHotkeyActive")
-            logger.info("從設定讀取熱鍵狀態: \(isHotkeyActive)")
+            logger.info("從設定讀取熱鍵狀態: \(self.isHotkeyActive)")
         } else {
             // 首次執行，設置為預設值 (開啟)
             isHotkeyActive = true
@@ -196,7 +196,7 @@ class AppState: ObservableObject {
             logger.info("首次執行，發送熱鍵設定變更通知")
         }
         
-        logger.info("設定已載入，當前熱鍵狀態: \(isHotkeyActive), 修飾鍵: \(hotKeyModifiers), 主鍵: \(hotKeyCharacter)")
+        logger.info("設定已載入，當前熱鍵狀態: \(self.isHotkeyActive), 修飾鍵: \(self.hotKeyModifiers), 主鍵: \(self.hotKeyCharacter)")
     }
     
     /// 保存單個設定到 UserDefaults
@@ -253,7 +253,7 @@ class AppState: ObservableObject {
         lastProcessingTime = processingTime
         self.wordsChanged = wordsChanged
         
-        logger.debug("文本統計已更新: \(characterCount)字符, \(self.wordsChanged)個修改, 處理時間 \(processingTime)秒")
+        logger.debug("文本統計已更新: \(self.characterCount)字符, \(self.wordsChanged)個修改, 處理時間 \(processingTime)秒")
     }
     
     /// 添加通知
@@ -292,18 +292,18 @@ class AppState: ObservableObject {
     func printDebugState() {
         logger.debug("""
         ===== AppState 狀態 =====
-        視覺效果: \(isVisualEffectsEnabled)
-        粒子效果: \(isParticleEffectsEnabled)
-        動畫: \(isAnimationsEnabled)
-        高品質效果: \(isHighQualityEffectsEnabled)
-        API有效: \(isApiKeyValid)
-        處理中: \(isProcessing) (\(processingProgress))
-        文本窗口: \(isTextWindowOpen)
-        設置窗口: \(isSettingsWindowOpen)
-        浮動按鈕: \(isFloatingButtonVisible)
-        熱鍵狀態: \(isHotkeyActive)
-        剪貼板監控: \(isClipboardMonitoringEnabled)
-        通知數量: \(notifications.count)
+        視覺效果: \(self.isVisualEffectsEnabled)
+        粒子效果: \(self.isParticleEffectsEnabled)
+        動畫: \(self.isAnimationsEnabled)
+        高品質效果: \(self.isHighQualityEffectsEnabled)
+        API有效: \(self.isApiKeyValid)
+        處理中: \(self.isProcessing) (\(self.processingProgress))
+        文本窗口: \(self.isTextWindowOpen)
+        設置窗口: \(self.isSettingsWindowOpen)
+        浮動按鈕: \(self.isFloatingButtonVisible)
+        熱鍵狀態: \(self.isHotkeyActive)
+        剪貼板監控: \(self.isClipboardMonitoringEnabled)
+        通知數量: \(self.notifications.count)
         ===========================
         """)
     }
@@ -322,13 +322,42 @@ class AppState: ObservableObject {
         )
         
         // 發送通知
-        logger.debug("文本已更新：原始字符數 \(originalCharacterCount)，校正後字符數 \(characterCount)，變更詞數 \(wordsChanged)")
+        logger.debug("文本已更新：原始字符數 \(self.originalCharacterCount)，校正後字符數 \(self.characterCount)，變更詞數 \(self.wordsChanged)")
     }
     
     /// 標記歡迎頁面已顯示
     func markWelcomeScreenAsShown() {
         hasShownWelcomeScreen = true
         UserDefaults.standard.set(true, forKey: "hasShownWelcomeScreen")
+    }
+    
+    /// 安全更新屬性的方法，確保在主線程執行
+    func safelyUpdate<T>(_ keyPath: WritableKeyPath<AppState, T>, value: T) {
+        // 檢查具體的 keyPath 並設置相應的屬性
+        switch keyPath {
+        case \AppState.originalText:
+            if let stringValue = value as? String {
+                self.originalText = stringValue
+            }
+        case \AppState.isProcessing:
+            if let boolValue = value as? Bool {
+                self.isProcessing = boolValue
+            }
+        case \AppState.processingProgress:
+            if let doubleValue = value as? Double {
+                self.processingProgress = doubleValue
+            }
+        case \AppState.correctedText:
+            if let stringValue = value as? String {
+                self.correctedText = stringValue
+            }
+        case \AppState.errorMessage:
+            if let stringValue = value as? String {
+                self.errorMessage = stringValue
+            }
+        default:
+            logger.warning("嘗試更新未支援的 keyPath")
+        }
     }
 }
 
