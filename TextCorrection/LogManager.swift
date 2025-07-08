@@ -63,39 +63,76 @@ class LogManager {
     private(set) var logEntries: [LogEntry] = []
     
     /// 最大存儲的日誌條數，防止內存過大
-    private let maxLogEntries = 1000
+    private let maxLogEntries = 2000
     
     /// 最小日誌記錄級別，低於此級別的日誌不會被記錄
-    private(set) var minimumLogLevel: LogLevel = .info
+    private(set) var minimumLogLevel: LogLevel = .debug
     
-    /// 日誌文件URL
-    private var logFileURL: URL {
+    /// 最後保存日誌的時間
+    private var lastSaveTime = Date()
+    
+    /// 日誌保存頻率（秒）
+    private let saveInterval: TimeInterval = 30
+    
+    /// 自動保存計時器
+    private var autoSaveTimer: Timer?
+    
+    /// 日誌文件目錄URL
+    private var logDirectoryURL: URL {
         let fileManager = FileManager.default
         let directoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("com.text.correction", isDirectory: true)
+            .appendingPathComponent("logs", isDirectory: true)
         
         // 確保目錄存在
         try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         
-        return directoryURL.appendingPathComponent("application.log")
+        return directoryURL
+    }
+    
+    /// 當前日誌文件URL
+    private var currentLogFileURL: URL {
+        return logDirectoryURL.appendingPathComponent("application.log")
     }
     
     /// 私有初始化方法
     private init() {
-        setupLogFile()
+        setupLogSystem()
         
         // 從用戶偏好設置加載日誌級別
         if let savedLevel = UserDefaults.standard.string(forKey: "LogLevel"),
            let level = LogLevel(rawValue: savedLevel) {
             minimumLogLevel = level
         }
+        
+        // 記錄應用啟動
+        log(level: .info, category: "Application", message: "應用程式啟動", subsystem: "com.text.correction")
+        
+        // 開始自動保存計時器
+        startAutoSaveTimer()
+        
+        // 註冊應用程式關閉通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillTerminate),
+            name: NSApplication.willTerminateNotification,
+            object: nil
+        )
     }
     
-    /// 設置日誌文件
-    private func setupLogFile() {
+    deinit {
+        autoSaveTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    /// 設置日誌系統
+    private func setupLogSystem() {
+        // 確保日誌目錄存在
+        try? FileManager.default.createDirectory(at: logDirectoryURL, withIntermediateDirectories: true)
+        
         // 確保日誌文件存在
-        if !FileManager.default.fileExists(atPath: logFileURL.path) {
-            FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
+        if !FileManager.default.fileExists(atPath: currentLogFileURL.path) {
+            FileManager.default.createFile(atPath: currentLogFileURL.path, contents: nil)
         }
         
         // 讀取現有日誌文件
@@ -103,18 +140,37 @@ class LogManager {
         
         // 清理過期日誌
         cleanupOldLogs()
+        
+        // 創建備份
+        createLogBackupIfNeeded()
+    }
+    
+    /// 開始自動保存計時器
+    private func startAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        
+        autoSaveTimer = Timer.scheduledTimer(withTimeInterval: saveInterval, repeats: true) { [weak self] _ in
+            self?.saveLogsToFile()
+        }
+    }
+    
+    /// 應用程式將要終止
+    @objc private func applicationWillTerminate() {
+        log(level: .info, category: "Application", message: "應用程式關閉", subsystem: "com.text.correction")
+        saveLogsToFile()
     }
     
     /// 加載日誌文件
     private func loadLogsFromFile() {
         do {
-            let data = try Data(contentsOf: logFileURL)
+            let data = try Data(contentsOf: currentLogFileURL)
             let decoder = JSONDecoder()
             let logs = try decoder.decode([LogEntry].self, from: data)
             logEntries = logs.suffix(maxLogEntries)
         } catch {
             // 如果文件不存在或格式錯誤，就從空開始
             logEntries = []
+            print("加載日誌文件失敗: \(error.localizedDescription)")
         }
     }
     
@@ -123,9 +179,66 @@ class LogManager {
         do {
             let encoder = JSONEncoder()
             let data = try encoder.encode(logEntries)
-            try data.write(to: logFileURL)
+            try data.write(to: currentLogFileURL)
+            lastSaveTime = Date()
         } catch {
             print("無法保存日誌文件: \(error.localizedDescription)")
+        }
+    }
+    
+    /// 創建日誌備份
+    private func createLogBackupIfNeeded() {
+        // 獲取當前日期
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: Date())
+        
+        // 備份文件名
+        let backupFileName = "application_\(dateString).log"
+        let backupURL = logDirectoryURL.appendingPathComponent(backupFileName)
+        
+        // 如果今天的備份已存在，則跳過
+        if FileManager.default.fileExists(atPath: backupURL.path) {
+            return
+        }
+        
+        // 創建備份
+        do {
+            if FileManager.default.fileExists(atPath: currentLogFileURL.path) {
+                try FileManager.default.copyItem(at: currentLogFileURL, to: backupURL)
+                
+                // 記錄備份創建
+                log(level: .info, category: "LogManager", message: "已創建日誌備份: \(backupFileName)", subsystem: "com.text.correction")
+            }
+        } catch {
+            print("創建日誌備份失敗: \(error.localizedDescription)")
+        }
+        
+        // 清理舊的備份文件（只保留最近7天）
+        cleanupOldBackups()
+    }
+    
+    /// 清理舊的備份文件
+    private func cleanupOldBackups() {
+        do {
+            let fileManager = FileManager.default
+            let backupFiles = try fileManager.contentsOfDirectory(at: logDirectoryURL, includingPropertiesForKeys: [.creationDateKey])
+                .filter { $0.lastPathComponent.starts(with: "application_") && $0.lastPathComponent.hasSuffix(".log") }
+                .sorted { (first, second) -> Bool in
+                    let firstDate = try first.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    let secondDate = try second.resourceValues(forKeys: [.creationDateKey]).creationDate ?? Date.distantPast
+                    return firstDate > secondDate
+                }
+            
+            // 如果備份超過7個，刪除最舊的
+            if backupFiles.count > 7 {
+                for file in backupFiles.dropFirst(7) {
+                    try fileManager.removeItem(at: file)
+                    log(level: .info, category: "LogManager", message: "已刪除舊日誌備份: \(file.lastPathComponent)", subsystem: "com.text.correction")
+                }
+            }
+        } catch {
+            print("清理舊備份失敗: \(error.localizedDescription)")
         }
     }
     
@@ -141,6 +254,7 @@ class LogManager {
     func setMinimumLogLevel(_ level: LogLevel) {
         minimumLogLevel = level
         UserDefaults.standard.set(level.rawValue, forKey: "LogLevel")
+        log(level: .info, category: "LogManager", message: "日誌級別已設置為: \(level.displayName)", subsystem: "com.text.correction")
     }
     
     /// 添加日誌條目
@@ -162,8 +276,8 @@ class LogManager {
                 self.logEntries.removeFirst()
             }
             
-            // 定期保存到文件
-            if self.logEntries.count % 20 == 0 {
+            // 每10條日誌保存一次，或者距離上次保存超過30秒
+            if self.logEntries.count % 10 == 0 || Date().timeIntervalSince(self.lastSaveTime) > self.saveInterval {
                 self.saveLogsToFile()
             }
         }
@@ -218,6 +332,7 @@ class LogManager {
     func clearLogs() {
         logEntries.removeAll()
         saveLogsToFile()
+        log(level: .info, category: "LogManager", message: "日誌已清空", subsystem: "com.text.correction")
     }
     
     /// 匯出日誌為文本
@@ -283,11 +398,16 @@ class LogManager {
             // 添加系統信息
             let systemInfoFile = reportDir.appendingPathComponent("system-info.txt")
             let systemInfo = """
-            應用版本: \(Utilities.getAppVersion())
-            macOS版本: \(Utilities.getOSVersion())
-            設備型號: \(Utilities.getDeviceModel())
+            應用版本: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知")
+            構建版本: \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "未知") 
+            macOS版本: \(ProcessInfo.processInfo.operatingSystemVersionString)
+            設備型號: \(getDeviceModel())
             CPU核心數: \(ProcessInfo.processInfo.processorCount)
             可用內存: \(ProcessInfo.processInfo.physicalMemory / (1024 * 1024)) MB
+            低電量模式: \(ProcessInfo.processInfo.isLowPowerModeEnabled ? "是" : "否")
+            日誌設置:
+            - 最低日誌級別: \(minimumLogLevel.displayName)
+            - 日誌條目數量: \(logEntries.count)
             偏好設置:
             - API Key設置: \(UserDefaults.standard.bool(forKey: "HasSetAPIKey") ? "已設置" : "未設置")
             - 開機自啟: \(UserDefaults.standard.bool(forKey: "LaunchAtStartup") ? "已啟用" : "未啟用")
@@ -295,9 +415,26 @@ class LogManager {
             """
             try systemInfo.write(to: systemInfoFile, atomically: true, encoding: .utf8)
             
+            // 添加備份日誌
+            let backupsDir = reportDir.appendingPathComponent("log_backups", isDirectory: true)
+            try FileManager.default.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+            
+            do {
+                let backupFiles = try FileManager.default.contentsOfDirectory(at: logDirectoryURL, includingPropertiesForKeys: nil)
+                    .filter { $0.lastPathComponent.starts(with: "application_") }
+                
+                for backupFile in backupFiles.prefix(3) { // 只複製最近3個備份
+                    let destination = backupsDir.appendingPathComponent(backupFile.lastPathComponent)
+                    try FileManager.default.copyItem(at: backupFile, to: destination)
+                }
+            } catch {
+                let errorInfo = "無法複製日誌備份: \(error.localizedDescription)"
+                try errorInfo.write(to: backupsDir.appendingPathComponent("backup_error.txt"), atomically: true, encoding: .utf8)
+            }
+            
             // 壓縮為ZIP文件
             let zipFile = tempDir.appendingPathComponent("TextCorrection-DiagnosticReport-\(Date().timeIntervalSince1970).zip")
-            try Utilities.createZipFile(sourceURL: reportDir, destinationURL: zipFile)
+            compressDirectory(sourceURL: reportDir, destinationURL: zipFile)
             
             return zipFile
         } catch {
@@ -305,42 +442,33 @@ class LogManager {
             return nil
         }
     }
-}
-
-// 擴展 Utilities 類添加 ZIP 壓縮功能
-extension Utilities {
-    /// 創建 ZIP 文件
-    static func createZipFile(sourceURL: URL, destinationURL: URL) throws {
+    
+    /// 壓縮目錄為ZIP文件
+    private func compressDirectory(sourceURL: URL, destinationURL: URL) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        process.arguments = ["-r", destinationURL.path, "."]
-        process.currentDirectoryURL = sourceURL
+        process.launchPath = "/usr/bin/zip"
+        process.arguments = ["-r", destinationURL.path, sourceURL.lastPathComponent]
+        process.currentDirectoryURL = sourceURL.deletingLastPathComponent()
         
-        try process.run()
-        process.waitUntilExit()
-        
-        if process.terminationStatus != 0 {
-            throw NSError(domain: "com.text.correction", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "ZIP壓縮失敗"])
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            print("壓縮文件夾失敗: \(error.localizedDescription)")
         }
     }
     
     /// 獲取設備型號
-    static func getDeviceModel() -> String {
+    private func getDeviceModel() -> String {
         var size = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
         var model = [CChar](repeating: 0, count: size)
         sysctlbyname("hw.model", &model, &size, nil, 0)
         return String(cString: model)
     }
-    
-    /// 獲取操作系統版本
-    static func getOSVersion() -> String {
-        let os = ProcessInfo.processInfo.operatingSystemVersion
-        return "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
-    }
 }
 
-// MARK: - 擴展 Logger 以使用 LogManager
+/// 擴展 Logger 以整合 LogManager
 extension Logger {
     /// 使用 LogManager 記錄日誌
     func logWithManager(level: LogManager.LogLevel, message: String) {

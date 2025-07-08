@@ -3,7 +3,7 @@ import os.log
 
 // 將整個類標記為 @MainActor，因為它主要處理 UI 元素
 @MainActor
-class TextWindowManager: @unchecked Sendable {
+class TextWindowManager: @unchecked Sendable, ObservableObject {
     weak var appDelegate: AppDelegate?
     
     // 將靜態屬性移到類別級別
@@ -1381,127 +1381,145 @@ class TextWindowManager: @unchecked Sendable {
         
         // 使用弱引用，避免強引用循環
         Task { @MainActor [weak self, weak textView] in
-            guard let self = self, let textView = textView else { return }
-            
-            // 安全檢查：確保textView的window仍然存在
-            guard let _ = textView.window else {
+            // 安全檢查，確保視圖和窗口仍然有效
+            guard let self = self,
+                  let textView = textView,
+                  let window = textView.window,
+                  let scrollView = textView.enclosingScrollView else {
                 Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                    .error("文本視圖已不再包含在有效視窗中，取消更新")
+                    .error("UI 更新時找不到有效的視圖階層")
                 return
             }
             
-            // 暫時禁用視窗調整，避免在更新文本時調整視窗大小
-            textView.layoutManager?.allowsNonContiguousLayout = false // 避免非連續布局導致的閃爍
-            textView.textStorage?.beginEditing() // 開始批次編輯
-            textView.textStorage?.setAttributedString(attributedString)
-            textView.textStorage?.endEditing() // 結束批次編輯，觸發單次布局更新
-            
-            // 更新統計資訊 - 直接使用保存的引用
-            if let statsView = self.statsView, let container = self.statsContainer {
-                // 更新統計信息
-                self.updateTextStatistics(originalText: originalText, correctedText: newText, statsView: statsView)
+            // 使用 autoreleasepool 降低內存壓力
+            autoreleasepool {
+                // 保存目前的滾動位置
+                let visibleRect = scrollView.contentView.bounds
+                let wasAtBottom = (visibleRect.maxY >= scrollView.documentView?.bounds.maxY ?? 0)
                 
-                // 比較完成後，添加淡入動畫顯示統計信息
-                if container.alphaValue == 0 {
-                    container.alphaValue = 1.0 // 直接設置，避免使用動畫上下文
-                }
-            } else {
-                // 如果找不到保存的引用，嘗試通過標識符查找（兼容性代碼）
-                Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                    .warning("找不到保存的statsView引用，嘗試通過標識符查找")
+                // 分批設置屬性字符串，避免一次設置過大的文本導致UI卡頓
+                let chunkSize = 50000 // 設置為每段50K個字符
                 
-                if let appDelegate = self.appDelegate {
-                    let allViews = appDelegate.textWindow?.contentView?.subviews.flatMap { view in 
-                        return self.getAllSubviews(view: view) 
-                    } ?? []
-                    let foundStatsView = allViews.first(where: { textField in 
-                        return (textField as? NSTextField)?.identifier?.rawValue == "statsView" 
-                    }) as? NSTextField
-                    let foundContainer = foundStatsView?.superview
-                    
-                    if let foundStatsView = foundStatsView, let container = foundContainer {
-                        // 更新引用以便下次使用
-                        self.statsView = foundStatsView
-                        self.statsContainer = container
-                        
-                        self.updateTextStatistics(originalText: originalText, correctedText: newText, statsView: foundStatsView)
-                        
-                        // 比較完成後，添加淡入動畫顯示統計信息
-                        if container.alphaValue == 0 {
-                            container.alphaValue = 1.0 // 直接設置，避免使用動畫上下文
-                        }
-                    } else {
-                        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                            .error("無法找到 statsView")
-                    }
-                }
-            }
-            
-            // 確保布局更新
-            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-            
-            do {
-                // 等待布局完成
-                try await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
-                
-                // 在使用textView前再次檢查它是否仍然有效
-                guard textView.window != nil else {
+                if attributedString.length > chunkSize {
+                    // 對於大型文本，分批處理
                     Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                        .error("布局更新後，文本視圖不再附加到有效窗口")
-                    return
+                        .info("處理大型文本 (\(attributedString.length) 字符)，使用分批處理")
+                    
+                    // 清空現有內容並設置字體和段落樣式
+                    let paragraphStyle = NSMutableParagraphStyle()
+                    paragraphStyle.lineSpacing = 12
+                    paragraphStyle.paragraphSpacing = 16
+                    paragraphStyle.lineBreakMode = .byWordWrapping
+                    
+                    let emptyAttributedString = NSAttributedString(
+                        string: "",
+                        attributes: [
+                            .font: self.getPungyuFont(size: 22),
+                            .foregroundColor: NSColor.white,
+                            .paragraphStyle: paragraphStyle
+                        ]
+                    )
+                    
+                    // 安全地設置空字符串作為初始內容
+                    textView.textStorage?.beginEditing()
+                    textView.textStorage?.setAttributedString(emptyAttributedString)
+                    textView.textStorage?.endEditing()
+                    
+                    // 分批添加內容
+                    let totalRange = NSRange(location: 0, length: attributedString.length)
+                    var currentLocation = 0
+                    
+                    while currentLocation < totalRange.length {
+                        let batchLength = min(chunkSize, totalRange.length - currentLocation)
+                        let batchRange = NSRange(location: currentLocation, length: batchLength)
+                        
+                        // 提取當前批次的文本
+                        let batchAttributedString = attributedString.attributedSubstring(from: batchRange)
+                        
+                        // 安全地添加到文本存儲
+                        textView.textStorage?.beginEditing()
+                        textView.textStorage?.append(batchAttributedString)
+                        textView.textStorage?.endEditing()
+                        
+                        // 更新當前位置
+                        currentLocation += batchLength
+                        
+                        // 每批次後讓UI更新一下
+                        window.update()
+                        
+                        // 讓系統處理一下其他任務，避免UI完全卡死
+                        // 使用同步方式短暫延遲，避免使用異步操作
+                        Thread.sleep(forTimeInterval: 0.001) // 1ms
+                    }
+                } else {
+                    // 小型文本，直接設置
+                    textView.textStorage?.beginEditing()
+                    textView.textStorage?.setAttributedString(attributedString)
+                    textView.textStorage?.endEditing()
+                    
+                    // 如果設置失敗，使用備用方法
+                    if textView.textStorage?.string != attributedString.string {
+                        textView.textStorage?.setAttributedString(attributedString)
+                    }
                 }
                 
-                // 確保捲動到內容頂部，讓用戶可以從頭閱讀比較結果
-                if textView.string.count > 0 {
-                    // 首先確保文本視圖有足夠大小容納內容
-                    let layoutManager = textView.layoutManager!
-                    let textContainer = textView.textContainer!
-                    let glyphRange = layoutManager.glyphRange(for: textContainer)
-                    let boundingRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-                    
-                    // 設置文本視圖大小以適應內容
-                    let newHeight = boundingRect.height + textView.textContainerInset.height * 2
-                    if textView.frame.size.height < newHeight {
-                        textView.frame.size.height = newHeight
-                    }
-                    
-                    // 捲動到頂部
-                    let topRange = NSRange(location: 0, length: min(100, textView.string.count))
-                    textView.scrollRangeToVisible(topRange)
-                    
-                    // 強制更新捲動視圖
-                    if let scrollView = textView.enclosingScrollView {
-                        scrollView.reflectScrolledClipView(scrollView.contentView)
-                        
-                        // 確保垂直捲動條可見
-                        scrollView.hasVerticalScroller = true
-                        if let scroller = scrollView.verticalScroller {
-                            scroller.isHidden = false
-                            scroller.needsDisplay = true
-                        }
-                        
-                        // 記錄捲動操作
-                        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                            .debug("捲動到內容頂部以便閱讀，確保UI元素可見")
-                    }
-                }
-                
-                // 等待滾動完成後再調整視窗大小
-                try await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
-                
-                // 再次檢查textView的有效性
-                guard textView.window != nil else { return }
-                
-                // 調整視窗大小以適應內容
-                if let scrollView = textView.enclosingScrollView {
-                    updateWindowSizeIfNeeded(textView: textView, scrollView: scrollView)
-                    
-                    // 確保捲動視圖已更新
+                // 恢復滾動位置
+                if wasAtBottom {
+                    textView.scrollToEndOfDocument(nil)
+                } else {
+                    scrollView.contentView.scroll(to: visibleRect.origin)
                     scrollView.reflectScrolledClipView(scrollView.contentView)
                 }
-            } catch {
-                Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                    .error("文本更新過程中發生錯誤: \(error.localizedDescription)")
+                
+                // 確保文本視圖可見並且窗口更新
+                textView.needsDisplay = true
+                window.update()
+            }
+            
+            // 更新統計信息
+            updateStatisticsInfo(originalText: originalText, correctedText: newText)
+            
+            // 等待布局完成
+            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
+            
+            // 調整視窗大小
+            if let scrollView = textView.enclosingScrollView {
+                updateWindowSizeIfNeeded(textView: textView, scrollView: scrollView)
+            }
+            
+            // 確保捲動到內容頂部，以便用戶可以從頭開始閱讀
+            if textView.string.count > 0 {
+                // 首先確保文本視圖有足夠大小容納內容
+                let layoutManager = textView.layoutManager!
+                let textContainer = textView.textContainer!
+                let glyphRange = layoutManager.glyphRange(for: textContainer)
+                let boundingRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+                
+                // 設置文本視圖大小以適應內容
+                let newHeight = boundingRect.height + textView.textContainerInset.height * 2
+                if textView.frame.size.height < newHeight {
+                    textView.frame.size.height = newHeight
+                }
+                
+                // 捲動到頂部
+                let topRange = NSRange(location: 0, length: min(100, textView.string.count))
+                textView.scrollRangeToVisible(topRange)
+                
+                // 強制更新捲動視圖
+                if let scrollView = textView.enclosingScrollView {
+                    scrollView.reflectScrolledClipView(scrollView.contentView)
+                    
+                    // 確保垂直捲動條可見
+                    scrollView.hasVerticalScroller = true
+                    if let scroller = scrollView.verticalScroller {
+                        scroller.isHidden = false
+                        scroller.needsDisplay = true
+                    }
+                    
+                    // 記錄捲動操作
+                    Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+                        .debug("捲動到內容頂部，確保UI元素可見")
+                }
             }
         }
     }
@@ -1960,6 +1978,76 @@ class TextWindowManager: @unchecked Sendable {
     @MainActor
     private func updateTopBarVisibilityAsync() {
         self.updateTopBarVisibility()
+    }
+
+    // 添加統一的統計信息更新方法
+    private func updateStatisticsInfo(originalText: String, correctedText: String) {
+        // 安全檢查，確保在主線程更新UI
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateStatisticsInfo(originalText: originalText, correctedText: correctedText)
+            }
+            return
+        }
+        
+        // 找到統計信息視圖
+        if let statsView = self.statsView, let container = self.statsContainer {
+            // 更新統計信息
+            self.updateTextStatistics(originalText: originalText, correctedText: correctedText, statsView: statsView)
+            
+            // 確保容器是可見的
+            if container.alphaValue == 0 {
+                container.alphaValue = 1.0 // 直接設置，避免使用動畫上下文
+            }
+        } else {
+            // 嘗試通過標識符查找
+            Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+                .warning("找不到已保存的統計視圖引用，嘗試通過標識符查找")
+            
+            if let appDelegate = self.appDelegate {
+                let allViews = appDelegate.textWindow?.contentView?.subviews.flatMap { view in 
+                    return self.getAllSubviews(view: view) 
+                } ?? []
+                
+                let foundStatsView = allViews.first(where: { textField in 
+                    return (textField as? NSTextField)?.identifier?.rawValue == "statsView" 
+                }) as? NSTextField
+                
+                let foundContainer = foundStatsView?.superview
+                
+                if let foundStatsView = foundStatsView, let container = foundContainer {
+                    // 更新引用以便下次使用
+                    self.statsView = foundStatsView
+                    self.statsContainer = container
+                    
+                    // 更新統計資訊
+                    self.updateTextStatistics(originalText: originalText, correctedText: correctedText, statsView: foundStatsView)
+                    
+                    // 確保容器是可見的
+                    if container.alphaValue == 0 {
+                        container.alphaValue = 1.0
+                    }
+                } else {
+                    Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+                        .error("無法找到 statsView，統計信息未更新")
+                }
+            }
+        }
+    }
+
+    /// 檢查管理器是否已被銷毀或無效
+    var isDestroyed: Bool {
+        // 檢查視窗是否已關閉
+        if let textWindow = appDelegate?.textWindow, !textWindow.isVisible {
+            return true
+        }
+        
+        // 檢查視圖是否已從視圖層次結構中移除
+        if let textView = appDelegate?.currentTextView, textView.isDestroyed {
+            return true
+        }
+        
+        return false
     }
 }
 

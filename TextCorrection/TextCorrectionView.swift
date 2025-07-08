@@ -109,23 +109,23 @@ struct FlowingGlowView: View {
     
     var body: some View {
         ZStack {
-            ForEach(0..<3) { i in
+            ForEach(0..<5) { i in
                 Circle()
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color(red: 0.3, green: 0.7, blue: 0.9, opacity: 0.4),
-                                Color(red: 0.5, green: 0.3, blue: 0.9, opacity: 0.1)
+                                Color(red: 0.3, green: 0.7, blue: 0.9, opacity: 0.7),
+                                Color(red: 0.5, green: 0.3, blue: 0.9, opacity: 0.4)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 200, height: 200)
-                    .blur(radius: 30)
+                    .frame(width: 300, height: 300)
+                    .blur(radius: 25)
                     .offset(
-                        x: animate ? CGFloat.random(in: -100...100) : CGFloat.random(in: -150...150),
-                        y: animate ? CGFloat.random(in: -50...50) : CGFloat.random(in: -100...100)
+                        x: animate ? CGFloat.random(in: -120...120) : CGFloat.random(in: -180...180),
+                        y: animate ? CGFloat.random(in: -70...70) : CGFloat.random(in: -120...120)
                     )
                     .animation(
                         Animation.easeInOut(duration: Double.random(in: 4...7))
@@ -187,8 +187,8 @@ struct ParticleEffectView: View {
                 timer?.invalidate()
                 timer = nil
             }
-            .onChange(of: appState.isParticleEffectsEnabled) {
-                if appState.isParticleEffectsEnabled {
+            .onChange(of: appState.isParticleEffectsEnabled) { _, newValue in
+                if newValue {
                     startGeneratingParticles(in: geometry.size)
                 } else {
                     timer?.invalidate()
@@ -203,8 +203,8 @@ struct ParticleEffectView: View {
         // 清除現有計時器
         timer?.invalidate()
         
-        // 創建新計時器，每0.5秒生成一個新粒子
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+        // 創建新計時器，每0.3秒生成一個新粒子
+        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
             withAnimation {
                 addParticle(in: size)
                 
@@ -214,7 +214,7 @@ struct ParticleEffectView: View {
         }
         
         // 初始生成一些粒子
-        for _ in 0..<5 {
+        for _ in 0..<8 {
             addParticle(in: size)
         }
     }
@@ -226,23 +226,24 @@ struct ParticleEffectView: View {
                 x: CGFloat.random(in: 0...size.width),
                 y: CGFloat.random(in: 0...size.height)
             ),
-            size: CGFloat.random(in: 8...15),
-            opacity: Double.random(in: 0.3...0.7),
+            size: CGFloat.random(in: 12...22),
+            opacity: Double.random(in: 0.5...0.9),
             rotation: Double.random(in: 0...360),
             color: [
                 Color(red: 0.5, green: 0.7, blue: 1.0),
-                Color(red: 0.7, green: 0.5, blue: 1.0),
-                Color(red: 1.0, green: 0.7, blue: 0.5)
+                Color(red: 0.8, green: 0.6, blue: 1.0),
+                Color(red: 1.0, green: 0.7, blue: 0.5),
+                Color(red: 0.4, green: 0.8, blue: 0.9)
             ].randomElement()!
         )
         
         particles.append(newParticle)
         
         // 添加動畫效果
-        withAnimation(Animation.linear(duration: Double.random(in: 3...6))) {
+        withAnimation(Animation.linear(duration: Double.random(in: 2...5))) {
             if let index = particles.firstIndex(where: { $0.id == newParticle.id }) {
                 particles[index].opacity = 0
-                particles[index].position.y -= CGFloat.random(in: 20...50)
+                particles[index].position.y -= CGFloat.random(in: 30...70)
                 particles[index].rotation += Double.random(in: 180...360)
             }
         }
@@ -297,7 +298,7 @@ struct TextCorrectionView: View, @unchecked Sendable {
                 // 僅當啟用視覺效果時顯示流光效果
                 if appState.isVisualEffectsEnabled {
                     FlowingGlowView()
-                        .opacity(0.15)
+                        .opacity(0.35)
                 }
                 
                 VStack(spacing: 15) {
@@ -377,14 +378,14 @@ struct TextCorrectionView: View, @unchecked Sendable {
                             Circle()
                                 .fill(
                                     RadialGradient(
-                                        gradient: Gradient(colors: [Color(red: 0.3, green: 0.5, blue: 0.9, opacity: 0.3), Color.clear]),
+                                        gradient: Gradient(colors: [Color(red: 0.3, green: 0.5, blue: 0.9, opacity: 0.5), Color.clear]),
                                         center: .center,
                                         startRadius: 0,
-                                        endRadius: 60
+                                        endRadius: 80
                                     )
                                 )
-                                .frame(width: 120, height: 40)
-                                .blur(radius: 15)
+                                .frame(width: 160, height: 60)
+                                .blur(radius: 12)
                                 .offset(x: -40, y: 0)
                         }
                         

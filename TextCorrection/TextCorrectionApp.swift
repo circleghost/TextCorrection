@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Cocoa
+import CoreText
 import os.log
 import Combine
 import KeychainAccess
@@ -21,6 +22,15 @@ struct TextCorrectionApp: App {
     
     init() {
         logger.info("TextCorrectionApp 初始化")
+        
+        // 檢查系統版本
+        checkSystemVersion()
+        
+        // 載入自定義字體
+        loadCustomFonts()
+        
+        // 設置應用程式菜單
+        setupApplicationMenu()
         
         // 在閉包外捕獲 appDelegate 的引用
         let appDelegateRef = self.appDelegate
@@ -132,6 +142,97 @@ struct TextCorrectionApp: App {
                 EmptyView()
             }
         }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func checkSystemVersion() {
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersion
+        let minimumVersion = (14, 0, 0)
+        
+        if (osVersion.majorVersion, osVersion.minorVersion, osVersion.patchVersion) < minimumVersion {
+            let alert = NSAlert()
+            alert.messageText = "系統版本不相容"
+            alert.informativeText = "此應用程式需要 macOS 14.0 (Sonoma) 或更新版本才能運行。"
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "確定")
+            alert.runModal()
+            NSApplication.shared.terminate(nil)
+        }
+    }
+    
+    private func loadCustomFonts() {
+        // 獲取應用程式Bundle中的字體檔案路徑
+        guard let fontURL = Bundle.main.url(forResource: "粉圓體", withExtension: "otf") else {
+            logger.error("無法找到粉圓體字體檔案")
+            return
+        }
+        
+        // 註冊字體
+        var error: Unmanaged<CFError>?
+        guard CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, &error) else {
+            logger.error("註冊字體失敗：\(error?.takeRetainedValue().localizedDescription ?? "未知錯誤")")
+            return
+        }
+        
+        // 初始化FontManager並驗證字體載入是否成功
+        _ = FontManager.shared
+        
+        // 檢查字體是否成功載入
+        let fontName = "jf-openhuninn-2.1"  // 粉圓體的實際字體名稱
+        if let _ = NSFont(name: fontName, size: 12) {
+            logger.info("粉圓體字體載入成功")
+            
+            // 可選：在啟動時記錄所有可用字體（僅在調試模式下）
+            #if DEBUG
+            FontManager.shared.listAllAvailableFonts()
+            #endif
+        } else {
+            logger.error("粉圓體字體載入失敗")
+        }
+    }
+    
+    private func setupApplicationMenu() {
+        // 獲取主菜單
+        let mainMenu = NSApplication.shared.mainMenu ?? NSMenu(title: "MainMenu")
+        
+        // 創建「工具」菜單
+        let toolsMenu = NSMenu(title: "工具")
+        let toolsMenuItem = NSMenuItem(title: "工具", action: nil, keyEquivalent: "")
+        toolsMenuItem.submenu = toolsMenu
+        
+        // 添加「顯示日誌」選項
+        let showLogsItem = NSMenuItem(
+            title: "顯示日誌視窗",
+            action: #selector(AppDelegate.showLogsView),
+            keyEquivalent: "l"
+        )
+        showLogsItem.keyEquivalentModifierMask = [.command, .option]
+        showLogsItem.target = appDelegate
+        toolsMenu.addItem(showLogsItem)
+        
+        // 添加「建立診斷報告」選項
+        let createReportItem = NSMenuItem(
+            title: "建立診斷報告",
+            action: #selector(AppDelegate.createDiagnosticReport),
+            keyEquivalent: "d"
+        )
+        createReportItem.keyEquivalentModifierMask = [.command, .option]
+        createReportItem.target = appDelegate
+        toolsMenu.addItem(createReportItem)
+        
+        // 如果工具菜單不存在，則添加到主菜單
+        if mainMenu.item(withTitle: "工具") == nil {
+            mainMenu.insertItem(toolsMenuItem, at: mainMenu.items.count - 1)
+        }
+        
+        // 確保主菜單被設置
+        if NSApplication.shared.mainMenu == nil {
+            NSApplication.shared.mainMenu = mainMenu
+        }
+        
+        // 記錄菜單設置完成
+        logger.info("應用程式菜單設置完成，已添加日誌視窗快捷鍵 Command+Option+L")
     }
 }
 

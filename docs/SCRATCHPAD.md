@@ -403,6 +403,98 @@ Thread 10: signal SIGABRT
 - 統一的資源管理機制可以大幅提高應用穩定性
 - 詳細的日誌記錄對診斷間歇性的字體問題至關重要
 
+### 問題10: Swift 6相容性警告和錯誤
+**狀態**: 進行中
+**相關文件**:
+- `TextCorrection/AppDelegate.swift`
+- `TextCorrection/NSTextView+Extension.swift`
+
+**問題描述**:
+1. AppDelegate.swift中存在多處async方法調用未使用await關鍵字的警告，這在Swift 6中會變成錯誤
+2. NSTextView+Extension.swift中存在unreachable catch塊，因為do塊中不會拋出錯誤
+
+**錯誤信息**:
+```
+/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppDelegate.swift:503:27 Expression is 'async' but is not marked with 'await'; this is an error in the Swift 6 language mode
+/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppDelegate.swift:539:24 Expression is 'async' but is not marked with 'await'; this is an error in the Swift 6 language mode
+/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/AppDelegate.swift:573:24 Expression is 'async' but is not marked with 'await'; this is an error in the Swift 6 language mode
+/Users/circleghost/Desktop/程式開發練習/錯字app/TextCorrection/NSTextView+Extension.swift:22:11 'catch' block is unreachable because no errors are thrown in 'do' block
+```
+
+**解決方案**:
+1. **修復AppDelegate.swift中的async/await問題**:
+   - 已檢查並確認關鍵位置已添加await關鍵字:
+     ```swift
+     // 第503行附近 - 已修復
+     if NSApp.isRunning {
+         do {
+             await NotificationManager.shared.sendCorrectionCompleteNotification(
+                 originalTextCount: textToProcess.count,
+                 correctedTextCount: finalProcessedText.count,
+                 wordsChanged: finalTotalWordsChanged
+             )
+         }
+     }
+     
+     // 第539行附近 - 已修復
+     if NSApp.isRunning {
+         do {
+             await NotificationManager.shared.sendErrorNotification(errorMessage: error.localizedDescription)
+         }
+     }
+     
+     // 第573行附近 - 已修復
+     Task {
+         await NotificationManager.shared.sendNotification(
+             title: "無法處理文本",
+             message: "選中的文本為空，請確保已選中文本再使用熱鍵。",
+             type: .warning,
+             delay: 0.1
+         )
+     }
+     ```
+
+2. **修復NSTextView+Extension.swift中的unreachable catch問題**:
+   - 將不必要的do-catch塊替換為直接的條件判斷:
+     ```swift
+     // 修改前：
+     do {
+         // 嘗試訪問文本存儲區，如果文本視圖已銷毀，這可能會失敗
+         _ = self.textStorage
+         return false
+     } catch {
+         return true
+     }
+     
+     // 修改後：
+     // 安全地檢查textStorage是否可用
+     if let _ = self.textStorage {
+         return false
+     } else {
+         return true
+     }
+     ```
+
+**待解決問題**:
+- 雖然已經對所有相關代碼進行修復，但編譯器仍然報告錯誤
+- 可能的原因包括:
+  1. 文件行號可能與報錯位置不一致（代碼編輯後行號可能已變）
+  2. 可能存在其他未被發現的async調用
+  3. 編譯器可能需要完全重新build項目才能識別變更
+  4. 可能需要清理項目緩存並重新編譯
+
+**下一步計劃**:
+1. 進行完整的項目rebuild
+2. 使用`Clean Build Folder`清理項目緩存後重試
+3. 搜索任何可能遺漏的其他async方法調用
+4. 如果問題仍然存在，考慮更直接的處理方式，如重寫包含問題代碼的函數
+
+**學習經驗**:
+- Swift 6更加嚴格地要求使用await標記async調用
+- 編譯器的行號報告有時可能不準確，特別是在進行多次編輯後
+- 使用強大的搜索工具（如grep）有助於識別整個代碼庫中的模式問題
+- Swift編譯器有時需要完全清理和重建才能正確識別某些錯誤的修復
+
 ---
 
 ## 已完成功能

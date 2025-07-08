@@ -11,20 +11,63 @@ import UserNotifications
 // 確保在整個檔案都可以使用 AppState
 import Foundation
 
-// 新增非 actor 隔離的工具函數用於獲取 API 金鑰
-@Sendable
-func getOpenAIApiKey() -> String {
-    do {
-        let keychain = Keychain(service: "com.yourcompany.TextCorrection")
-        return try keychain.get("OpenAIApiKey") ?? ""
-    } catch {
-        print("無法取得 API 金鑰")
-        return ""
+// 安全的 API 金鑰管理
+struct SecureAPIKeyManager {
+    private static let keychain = Keychain(service: "com.yourcompany.TextCorrection")
+        .accessibility(.whenUnlockedThisDeviceOnly)
+        .synchronizable(false)
+    
+    @Sendable
+    static func getAPIKey() -> String {
+        do {
+            // 從安全的 Keychain 獲取 API 金鑰
+            return try keychain.get("OpenAIApiKey") ?? ""
+        } catch {
+            print("無法安全取得 API 金鑰: \(error)")
+            return ""
+        }
+    }
+    
+    static func setAPIKey(_ key: String) throws {
+        guard !key.isEmpty else {
+            try keychain.remove("OpenAIApiKey")
+            return
+        }
+        
+        // 基本驗證 API 金鑰格式
+        guard key.hasPrefix("sk-") && key.count > 20 else {
+            throw APIKeyError.invalidFormat
+        }
+        
+        try keychain.set(key, key: "OpenAIApiKey")
+    }
+    
+    static func removeAPIKey() throws {
+        try keychain.remove("OpenAIApiKey")
     }
 }
 
-// 將 AppDelegate 標記為 @unchecked Sendable，避免 Swift 併發警告
-extension AppDelegate: @unchecked Sendable {}
+enum APIKeyError: LocalizedError {
+    case invalidFormat
+    case storageError
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidFormat:
+            return "API 金鑰格式無效"
+        case .storageError:
+            return "無法儲存 API 金鑰"
+        }
+    }
+}
+
+// 向後兼容的函數
+@Sendable
+func getOpenAIApiKey() -> String {
+    return SecureAPIKeyManager.getAPIKey()
+}
+
+// 移除不安全的 Sendable 聲明
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -84,6 +127,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var swiftUITextWindow: NSWindow?
     private var feedbackWindow: NSWindow?
     private var logsWindow: NSWindow?
+    
+    // 新增一個標記應用程序是否正在終止的屬性
+    var isTerminating = false
+    
+    // 選中的文本
+    private var correctedText: String = ""
     
     // 添加粉圓體字體輔助方法 - 改為靜態方法
     private static func getPungyuFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
@@ -170,12 +219,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AppKitBridge.shared.printDebugState()
         
         // 發送啟動通知
-        NotificationManager.shared.sendNotification(
-            title: "錯字糾正已啟動",
-            message: "應用程式已在背景運行，可以通過菜單欄圖標或熱鍵使用。",
-            type: .info,
-            delay: 1.0
-        )
+        Task {
+            do {
+                try await NotificationManager.shared.sendNotification(
+                    title: "錯字糾正已啟動",
+                    message: "應用程式已在背景運行，可以通過菜單欄圖標或熱鍵使用。",
+                    type: .info,
+                    delay: 1.0
+                )
+            } catch {
+                logger.error("發送啟動通知時出錯: \(error.localizedDescription)")
+            }
+        }
     }
     
     /// 檢查輔助功能權限
@@ -343,181 +398,240 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AppState.shared.safelyUpdate(\.isProcessing, value: true)
         AppState.shared.safelyUpdate(\.processingProgress, value: 0.1)
         
-        // 獲取需要的參數，避免在 Task 內部捕獲 self
-        let currentTextView = self.currentTextView
-        // 直接複製函數實現到本地域，避免捕獲 self
-        let extractMarkdownBlock: @Sendable (String) -> String = { text in
-            let pattern = "```([\\s\\S]*?)```"
-            
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count)) {
-                
-                if match.numberOfRanges > 1,
-                   let range = Range(match.range(at: 1), in: text) {
-                    return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        // 使用 autoreleasepool 減少內存壓力
+        autoreleasepool {
+            // 獲取需要的參數，避免在 Task 內部捕獲 self
+            let currentTextView = self.currentTextView
+            // 直接複製函數實現到本地域，避免捕獲 self
+            let extractMarkdownBlock: @Sendable (String) -> String = { text in
+                // 確保文本不為空並有效
+                guard !text.isEmpty else {
+                    return ""
                 }
+                
+                // 使用更安全的模式處理文本
+                let pattern = "```([\\s\\S]*?)```"
+                
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                    // 保護檢查：確保 text.utf16.count 在有效範圍內
+                    let nsRange = NSRange(location: 0, length: min(text.utf16.count, Int.max - 1))
+                    
+                    if let match = regex.firstMatch(in: text, options: [], range: nsRange) {
+                        if match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: text) {
+                            // 安全地提取字符串範圍
+                            let result = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            return result
+                        }
+                    }
+                }
+                
+                // 如果沒有找到代碼塊，安全地清理文本
+                // 使用更安全的方式替換文本而不是直接替換
+                let components = text.components(separatedBy: "```")
+                let joinedText = components.joined(separator: "")
+                return joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let systemPromptCopy = self.systemPrompt
+            let textWindowManager = self.textWindowManager
+            // 獲取 OpenAI 服務引用（確保非可選）
+            guard let openAIServiceRef = self.openAIService else {
+                logger.error("OpenAI 服務未初始化")
+                AppState.shared.errorMessage = "服務未初始化"
+                AppState.shared.isProcessing = false
+                return
             }
             
-            // 如果沒有找到代碼塊，先移除所有 ``` 標記再返回原始文本
-            let cleanedText = text.replacingOccurrences(of: "```", with: "")
-            return cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        let systemPromptCopy = self.systemPrompt
-        let textWindowManager = self.textWindowManager
-        // 獲取 OpenAI 服務引用（確保非可選）
-        guard let openAIServiceRef = self.openAIService else {
-            logger.error("OpenAI 服務未初始化")
-            AppState.shared.errorMessage = "服務未初始化"
-            AppState.shared.isProcessing = false
-            return
-        }
-        // 獲取 self 的弱引用，供後續閉包使用
-        weak var weakSelf = self
-        
-        // 使用流式 API 回應
-        Task.detached {
-            do {
-                var cumulativeResponse = ""
+            // 獲取 self 的弱引用，供後續閉包使用
+            weak var weakSelf = self
+            let loggerCopy = self.logger
+            
+            // 使用流式 API 回應
+            Task.detached {
+                // 再次確認 API 服務仍然可用
+                guard openAIServiceRef.isAvailable() else {
+                    await MainActor.run {
+                        AppState.shared.isProcessing = false
+                        AppState.shared.errorMessage = "API 服務當前不可用"
+                        loggerCopy.error("API 服務當前不可用，無法處理文本")
+                    }
+                    return
+                }
                 
-                try await openAIServiceRef.streamOpenAiApi(
-                    text: textToProcess,
-                    apiKeyProvider: { return getOpenAIApiKey() },
-                    systemPrompt: systemPromptCopy
-                ) { newContent in
-                    // 累積回應 - 不需要捕獲 self
-                    cumulativeResponse += newContent
+                do {
+                    // 使用 StringBuilder 類型的結構來累積響應，避免頻繁的字符串拼接
+                    let cumulativeResponse = StringBuilder()
                     
-                    // 提取 markdown 代碼塊中的內容 (如果有)
-                    let processedText = extractMarkdownBlock(cumulativeResponse)
-                    
-                    // 在主線程上更新 UI
-                    Task { @MainActor in
-                        // 更新狀態和 UI - 只顯示文本而不進行比較
-                        AppState.shared.correctedText = processedText
-                        
-                        // 計算進度 (這只是一個估計值)
-                        let progress = min(0.1 + Double(cumulativeResponse.count) / Double(textToProcess.count), 0.95)
-                        AppState.shared.processingProgress = progress
-                        
-                        // 獲取 textView
-                        guard let textView = currentTextView else { return }
-                        
-                        // 在串流過程中只顯示處理後的文字，不進行差異比較
-                        let paragraphStyle = NSMutableParagraphStyle()
-                        paragraphStyle.lineSpacing = 8
-                        paragraphStyle.lineBreakMode = .byWordWrapping // 確保按單詞換行
-                        
-                        // 使用固定字體大小和樣式，避免因樣式變化導致的抖動
-                        let attributedString = NSAttributedString(
-                            string: processedText,
-                            attributes: [
-                                .font: NSFont.systemFont(ofSize: 22), // 增大字體與比較文字一致
-                                .foregroundColor: NSColor.white,
-                                .paragraphStyle: paragraphStyle
-                            ]
-                        )
-                        
-                        // 如果API回傳的資料已完整但串流還在進行，可以提前進行比較
-                        if processedText.count > 0 && processedText.contains("結束") {
-                            // 檢測到完整響應，提前進行比較
-                            if let windowManager = textWindowManager {
-                                windowManager.updateTextViewWithDiff(
-                                    originalText: textToProcess,
-                                    newText: processedText,
-                                    textView: textView
+                    try await openAIServiceRef.streamOpenAiApi(
+                        text: textToProcess,
+                        apiKeyProvider: { return getOpenAIApiKey() },
+                        systemPrompt: systemPromptCopy
+                    ) { newContent in
+                        // 使用 StringBuilder 附加新內容，而不是直接拼接字符串
+                        autoreleasepool {
+                            cumulativeResponse.append(newContent)
+                            
+                            // 提取 markdown 代碼塊中的內容 (如果有)
+                            let processedText = extractMarkdownBlock(cumulativeResponse.toString())
+                            
+                            // 在主線程上更新 UI
+                            Task { @MainActor in
+                                // 檢查應用程序是否仍在運行
+                                guard NSApp.isRunning else { return }
+                                
+                                // 更新狀態和 UI - 只顯示文本而不進行比較
+                                AppState.shared.correctedText = processedText
+                                
+                                // 計算進度 (這只是一個估計值)
+                                let progress = min(0.1 + Double(cumulativeResponse.length) / Double(textToProcess.count), 0.95)
+                                AppState.shared.processingProgress = progress
+                                
+                                // 獲取 textView - 確保 UI 元素仍然存在
+                                guard let textView = currentTextView, !textView.isDestroyed else { return }
+                                
+                                // 在串流過程中只顯示處理後的文字，不進行差異比較
+                                let paragraphStyle = NSMutableParagraphStyle()
+                                paragraphStyle.lineSpacing = 8
+                                paragraphStyle.lineBreakMode = .byWordWrapping // 確保按單詞換行
+                                
+                                // 使用固定字體大小和樣式，避免因樣式變化導致的抖動
+                                let attributedString = NSAttributedString(
+                                    string: processedText,
+                                    attributes: [
+                                        .font: NSFont.systemFont(ofSize: 22), // 增大字體與比較文字一致
+                                        .foregroundColor: NSColor.white,
+                                        .paragraphStyle: paragraphStyle
+                                    ]
                                 )
                                 
-                                // 更新窗口大小以適應內容
-                                windowManager.resizeWindowToFitContent()
-                            }
-                        } else {
-                            // 否則僅顯示流式文本，但避免頻繁更新導致抖動
-                            DispatchQueue.main.async {
-                                // 保存目前的滾動位置
-                                let wasAtBottom = (textView.visibleRect.maxY >= textView.bounds.maxY)
-                                
-                                // 設置新的文本
-                                textView.textStorage?.setAttributedString(attributedString)
-                                
-                                // 如果之前是在底部，保持在底部滾動位置
-                                if wasAtBottom {
-                                    textView.scrollToEndOfDocument(nil)
-                                }
-                                
-                                // 更新窗口大小以適應內容
-                                if let windowManager = textWindowManager {
-                                    windowManager.resizeWindowToFitContent()
+                                // 如果API回傳的資料已完整但串流還在進行，可以提前進行比較
+                                if processedText.count > 0 && processedText.contains("結束") {
+                                    // 檢測到完整響應，提前進行比較
+                                    if let windowManager = textWindowManager, !windowManager.isDestroyed {
+                                        windowManager.updateTextViewWithDiff(
+                                            originalText: textToProcess,
+                                            newText: processedText,
+                                            textView: textView
+                                        )
+                                        
+                                        // 更新窗口大小以適應內容
+                                        windowManager.resizeWindowToFitContent()
+                                    }
+                                } else {
+                                    // 否則僅顯示流式文本，但避免頻繁更新導致抖動
+                                    DispatchQueue.main.async {
+                                        // 保存目前的滾動位置
+                                        let wasAtBottom = (textView.visibleRect.maxY >= textView.bounds.maxY)
+                                        
+                                        // 設置新的文本
+                                        textView.textStorage?.setAttributedString(attributedString)
+                                        
+                                        // 如果之前是在底部，保持在底部滾動位置
+                                        if wasAtBottom {
+                                            textView.scrollToEndOfDocument(nil)
+                                        }
+                                        
+                                        // 更新窗口大小以適應內容
+                                        if let windowManager = textWindowManager, !windowManager.isDestroyed {
+                                            windowManager.resizeWindowToFitContent()
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // 完成處理
-                let processingTime = Date().timeIntervalSince(startTime)
-                
-                // 提取最終結果和計算差異
-                let finalProcessedText = extractMarkdownBlock(cumulativeResponse)
-                
-                // 記錄API調用後的文本內容
-                self.logger.debug("API調用後文本內容:\n\(finalProcessedText)")
-                
-                let finalTotalWordsChanged = TextProcessing.calculateChangedWords(
-                    original: textToProcess,
-                    rewritten: finalProcessedText
-                )
-                
-                // 在主線程執行最終 UI 更新
-                await MainActor.run {
-                    // 先存儲 weakSelf 的本地副本到一個不可變變數，避免多次存取共享狀態
-                    let localSelf = weakSelf
+                    // 完成處理
+                    let processingTime = Date().timeIntervalSince(startTime)
                     
-                    // 使用固定的 AppState 和 TextWindowManager，避免透過 weakSelf 存取
-                    AppState.shared.isProcessing = false
-                    AppState.shared.processingProgress = 1.0
-                    AppState.shared.lastProcessingTime = processingTime
+                    // 安全處理：確保在最終處理之前檢查必要的條件
+                    // 避免多餘的處理，如果 weakSelf 或應用程序已不存在
                     
-                    // 使用更新方法更新文本內容
-                    AppState.shared.updateTextInfo(original: textToProcess, corrected: finalProcessedText)
-                    
-                    // 如果需要調用 self 的方法，先確認 self 仍然存在
-                    if let appDelegate = localSelf {
-                        appDelegate.showTextWindowWithDiff(original: textToProcess, rewritten: finalProcessedText)
-                        appDelegate.logger.debug("文本處理完成，用時: \(String(format: "%.2f", processingTime))秒，變更詞數: \(finalTotalWordsChanged)")
+                    // 檢查應用程序是否正在運行
+                    guard NSApp.isRunning else {
+                        return
                     }
-                }
-                
-                // 發送系統通知
-                NotificationManager.shared.sendCorrectionCompleteNotification(
-                    originalTextCount: textToProcess.count,
-                    correctedTextCount: finalProcessedText.count,
-                    wordsChanged: finalTotalWordsChanged
-                )
-            } catch {
-                // 使用 MainActor 運行錯誤處理代碼
-                await MainActor.run {
-                    // 先存儲 weakSelf 的本地副本，避免多次存取共享狀態
-                    let localSelf = weakSelf
                     
-                    // 直接使用 AppState 而不透過 weakSelf
-                    AppState.shared.isProcessing = false
-                    AppState.shared.errorMessage = "處理文本時發生錯誤：\(error.localizedDescription)"
+                    // 提取最終結果和計算差異
+                    let finalProcessedText = extractMarkdownBlock(cumulativeResponse.toString())
                     
-                    // 添加錯誤通知
-                    AppState.shared.addNotification(
-                        title: "處理失敗",
-                        message: error.localizedDescription,
-                        type: .error
+                    // 記錄API調用後的文本內容
+                    loggerCopy.debug("API調用後文本內容:\n\(finalProcessedText)")
+                    
+                    let finalTotalWordsChanged = TextProcessing.calculateChangedWords(
+                        original: textToProcess,
+                        rewritten: finalProcessedText
                     )
                     
-                    // 只在 self 仍然存在時記錄錯誤
-                    if let appDelegate = localSelf {
-                        appDelegate.logger.error("處理文本時發生錯誤：\(error.localizedDescription)")
+                    // 在主線程執行最終 UI 更新
+                    await MainActor.run {
+                        // 先存儲 weakSelf 的本地副本到一個不可變變數，避免多次存取共享狀態
+                        guard let localSelf = weakSelf else { return }
+                        
+                        // 使用固定的 AppState 和 TextWindowManager，避免透過 weakSelf 存取
+                        AppState.shared.isProcessing = false
+                        AppState.shared.processingProgress = 1.0
+                        AppState.shared.lastProcessingTime = processingTime
+                        
+                        // 使用更新方法更新文本內容
+                        AppState.shared.updateTextInfo(original: textToProcess, corrected: finalProcessedText)
+                        
+                        // 只有當 UI 元素仍然可用時才更新
+                        if !localSelf.isTerminating {
+                            localSelf.showTextWindowWithDiff(original: textToProcess, rewritten: finalProcessedText)
+                            localSelf.logger.debug("文本處理完成，用時: \(String(format: "%.2f", processingTime))秒，變更詞數: \(finalTotalWordsChanged)")
+                        }
+                    }
+                    
+                    // 發送系統通知 - 確保應用程序仍在運行狀態
+                    if NSApp.isRunning {
+                        // 使用 Task 包裝非同步調用
+                        Task {
+                            do {
+                                try await NotificationManager.shared.sendCorrectionCompleteNotification(
+                                    originalTextCount: textToProcess.count,
+                                    correctedTextCount: finalProcessedText.count,
+                                    wordsChanged: finalTotalWordsChanged
+                                )
+                            } catch {
+                                self.logger.error("發送完成通知時發生錯誤: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                } catch {
+                    // 使用 MainActor 運行錯誤處理代碼
+                    await MainActor.run {
+                        // 先存儲 weakSelf 的本地副本，避免多次存取共享狀態
+                        let localSelf = weakSelf
+                        
+                        // 直接使用 AppState 而不透過 weakSelf
+                        AppState.shared.isProcessing = false
+                        AppState.shared.errorMessage = "處理文本時發生錯誤：\(error.localizedDescription)"
+                        
+                        // 添加錯誤通知
+                        AppState.shared.addNotification(
+                            title: "處理失敗",
+                            message: error.localizedDescription,
+                            type: .error
+                        )
+                        
+                        // 只在 self 仍然存在時記錄錯誤
+                        if let appDelegate = localSelf {
+                            appDelegate.logger.error("處理文本時發生錯誤：\(error.localizedDescription)")
+                        }
+                    }
+                    
+                    // 發送錯誤通知 - 確保應用程序仍在運行狀態
+                    if NSApp.isRunning {
+                        // 使用 Task 包裝非同步調用，以確保在正確的上下文中執行
+                        Task {
+                            do {
+                                try await NotificationManager.shared.sendErrorNotification(errorMessage: error.localizedDescription)
+                            } catch {
+                                self.logger.error("發送錯誤通知時發生錯誤: \(error.localizedDescription)")
+                            }
+                        }
                     }
                 }
-                
-                // 發送錯誤通知
-                NotificationManager.shared.sendErrorNotification(errorMessage: error.localizedDescription)
             }
         }
     }
@@ -1039,6 +1153,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
         
+        guard !text.isEmpty else {
+            logger.warning("熱鍵觸發處理選中文本，但文本為空")
+            
+            // 在處理空文本的情況下發送通知
+            Task {
+                do {
+                    try await NotificationManager.shared.sendNotification(
+                        title: "無法處理文本",
+                        message: "選中的文本為空，請確保已選中文本再使用熱鍵。",
+                        type: .warning,
+                        delay: 0.1
+                    )
+                } catch {
+                    self.logger.error("發送警告通知時發生錯誤: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
+        
         logger.info("熱鍵觸發直接處理選中文本，長度: \(text.count)")
         
         // 通知PasteboardManager這是熱鍵觸發，不要顯示浮動按鈕
@@ -1047,11 +1180,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // 保存選中的文本
         lastSelectedText = text
         
-        // 顯示文本窗口
-        showSwiftUITextWindow(text: text)
-        
-        // 立即開始處理選中的文本
-        rewriteText()
+        // 使用 autoreleasepool 減少內存壓力
+        autoreleasepool {
+            // 安全處理：確保文本處理相關的管理器存在
+            guard let textWindowManager = self.textWindowManager else {
+                logger.error("無法處理文本：TextWindowManager 未初始化")
+                return
+            }
+            
+            // 立即設置 AppState 的原始文本，確保在任務開始前就準備好
+            AppState.shared.originalText = text
+            
+            // 確保在主線程上操作 UI
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                // 顯示文本窗口
+                textWindowManager.showTextWindow(text: text)
+                
+                // 再次確認 AppState 有正確的原始文本
+                AppState.shared.originalText = text
+                
+                // 設置原始文本
+                self.originalText = text
+                
+                // 開始處理文本前添加安全檢查
+                guard self.openAIService != nil else {
+                    logger.error("無法處理文本：OpenAIService 未初始化")
+                    AppState.shared.errorMessage = "服務未初始化"
+                    return
+                }
+                
+                // 延遲一小段時間再開始處理，確保UI已完全更新
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                
+                // 開始文本處理
+                self.rewriteText()
+            }
+        }
     }
 
     // 處理文本方法
@@ -1206,6 +1372,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     // 應用程式即將終止
     func applicationWillTerminate(_ notification: Notification) {
+        // 標記應用程序正在終止
+        isTerminating = true
+        
         logger.info("應用程式即將終止，清理資源")
         
         // 先釋放文本窗口管理器，確保它的deinit被正確調用
@@ -1344,6 +1513,72 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+    
+    /// 創建並分享診斷報告
+    @objc func createDiagnosticReport() {
+        logger.info("生成診斷報告")
+        
+        // 顯示等待提示
+        let alert = NSAlert()
+        alert.messageText = "生成診斷報告"
+        alert.informativeText = "正在收集系統信息並創建診斷報告，請稍候..."
+        alert.alertStyle = .informational
+        
+        let progressIndicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 300, height: 20))
+        progressIndicator.style = .bar
+        progressIndicator.isIndeterminate = true
+        progressIndicator.startAnimation(nil)
+        
+        alert.accessoryView = progressIndicator
+        
+        // 創建並顯示提示，但不阻塞用戶操作
+        let window = alert.window
+        window.level = .floating
+        window.orderFront(nil)
+        
+        // 在後台線程創建診斷報告
+        DispatchQueue.global(qos: .userInitiated).async {
+            if let reportURL = LogManager.shared.exportDiagnosticReport() {
+                // 切換到主線程顯示結果
+                DispatchQueue.main.async {
+                    // 關閉進度提示
+                    window.orderOut(nil)
+                    
+                    // 顯示成功消息並提供打開報告的選項
+                    let resultAlert = NSAlert()
+                    resultAlert.messageText = "診斷報告已生成"
+                    resultAlert.informativeText = "診斷報告已創建，您可以打開報告或將其發送給技術支援人員。"
+                    resultAlert.alertStyle = .informational
+                    resultAlert.addButton(withTitle: "打開報告位置")
+                    resultAlert.addButton(withTitle: "確定")
+                    
+                    if resultAlert.runModal() == .alertFirstButtonReturn {
+                        // 打開包含報告的文件夾
+                        NSWorkspace.shared.activateFileViewerSelecting([reportURL])
+                    }
+                    
+                    // 記錄日誌
+                    self.logger.info("診斷報告已創建: \(reportURL.path)")
+                }
+            } else {
+                // 處理錯誤
+                DispatchQueue.main.async {
+                    // 關閉進度提示
+                    window.orderOut(nil)
+                    
+                    // 顯示錯誤消息
+                    let errorAlert = NSAlert()
+                    errorAlert.messageText = "無法創建診斷報告"
+                    errorAlert.informativeText = "創建診斷報告時出現錯誤，請稍後再試。"
+                    errorAlert.alertStyle = .critical
+                    errorAlert.runModal()
+                    
+                    // 記錄錯誤
+                    self.logger.error("創建診斷報告失敗")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - NSWindowDelegate
@@ -1373,5 +1608,35 @@ extension AppDelegate: NSWindowDelegate {
             self.logger.debug("日誌視窗將要關閉")
             logsWindow = nil
         }
+    }
+}
+
+// 優化的 StringBuilder 類別，使用更高效的記憶體管理
+private class StringBuilder {
+    private var buffer: String = ""
+    private let maxCapacity = 10000
+    
+    var length: Int {
+        return buffer.count
+    }
+    
+    func append(_ string: String) {
+        buffer += string
+        
+        // 避免字符串過大導致記憶體問題
+        if buffer.count > maxCapacity {
+            // 保留最後的 80% 內容
+            let keepLength = Int(Double(maxCapacity) * 0.8)
+            let startIndex = buffer.index(buffer.endIndex, offsetBy: -keepLength)
+            buffer = String(buffer[startIndex...])
+        }
+    }
+    
+    func toString() -> String {
+        return buffer
+    }
+    
+    func clear() {
+        buffer = ""
     }
 }

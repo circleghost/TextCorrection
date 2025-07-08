@@ -1,4 +1,5 @@
 .DS_Store
+**/.DS_Store
 xcuserdata/
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
@@ -20,7 +21,38 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 .build/
+build/
 # 忽略 Xcode 的共享 scheme
 *.xcscheme
 xcuserdata/
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*.orig
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 

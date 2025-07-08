@@ -2,7 +2,8 @@ import Cocoa
 import os.log
 import Combine
 
-class PasteboardManager: @unchecked Sendable {
+@MainActor
+class PasteboardManager {
     weak var appDelegate: AppDelegate?
     private var lastPasteboardChangeCount: Int = 0
     private var timer: Timer?
@@ -39,7 +40,8 @@ class PasteboardManager: @unchecked Sendable {
         isHotkeyTriggeredChange = true
         
         // 2秒後重置標誌，以防萬一
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 秒
             self?.isHotkeyTriggeredChange = false
         }
     }
@@ -86,10 +88,8 @@ class PasteboardManager: @unchecked Sendable {
         // 將當前剪貼板內容保存為最後處理的字符串，避免重複處理
         self.lastProcessedString = NSPasteboard.general.string(forType: .string)
         
-        // 在主線程上檢查當前剪貼板
-        DispatchQueue.main.async { [weak self] in
-            self?.checkCurrentClipboard()
-        }
+        // 檢查當前剪貼板（已經在 MainActor 中）
+        checkCurrentClipboard()
         
         isObserving = true
         
@@ -113,7 +113,8 @@ class PasteboardManager: @unchecked Sendable {
                 AppState.shared.lastClipboardChangeTime = Date()
                 
                 // 為防止頻繁處理相同內容，使用延遲執行
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 秒
                     self?.checkCurrentClipboard()
                 }
             }
@@ -159,15 +160,19 @@ class PasteboardManager: @unchecked Sendable {
         }
         
         // 對任何非空文本顯示浮動按鈕 (不論是否重複)
-        DispatchQueue.main.async { [weak self] in
-            // 只有有足夠字符的文本才值得校正
-            if clipboardString.count > 5 {
-                // 使用AppDelegate顯示浮動按鈕
-                self?.appDelegate?.showFloatingButton()
-                
-                // 發送系統通知，告知用戶檢測到可校正的文本
-                if clipboardString.count > 20 && !isSameAsLast {  // 避免對太短或重複的文本發送通知
-                    NotificationManager.shared.sendClipboardDetectedNotification(textLength: clipboardString.count)
+        // 只有有足夠字符的文本才值得校正
+        if clipboardString.count > 5 {
+            // 使用AppDelegate顯示浮動按鈕
+            appDelegate?.showFloatingButton()
+            
+            // 發送系統通知，告知用戶檢測到可校正的文本
+            if clipboardString.count > 20 && !isSameAsLast {  // 避免對太短或重複的文本發送通知
+                Task {
+                    do {
+                        try await NotificationManager.shared.sendClipboardDetectedNotification(textLength: clipboardString.count)
+                    } catch {
+                        logger.error("發送剪貼板通知時出錯: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -179,7 +184,8 @@ class PasteboardManager: @unchecked Sendable {
         logger.info("剪貼板監視暫時禁用")
         
         // 2秒後自動重新啟用
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 秒
             guard let self = self else { return }
             self.temporarilyDisabled = false
             self.logger.info("剪貼板監視重新啟用")

@@ -1,7 +1,7 @@
 import Cocoa
 import os.log
 
-class TextProcessing: @unchecked Sendable {
+struct TextProcessing {
     // 添加日誌對象
     private static let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextProcessing")
     
@@ -173,10 +173,10 @@ class TextProcessing: @unchecked Sendable {
             var result = [DiffChange]()
             result.reserveCapacity(diff.count) // 預先分配容量
             
-            var currentEqual = ""
-            var currentInsert = ""
-            var currentDelete = ""
-            
+        var currentEqual = ""
+        var currentInsert = ""
+        var currentDelete = ""
+        
             // 合併差異函數，將當前累積的變更添加到結果
             let mergeChanges = {
                 // 清理不必要的空字串
@@ -204,36 +204,36 @@ class TextProcessing: @unchecked Sendable {
             }
             
             // 遍歷所有差異，合併相鄰的同類變更
-            for change in diff {
-                switch change {
-                case .equal(let text):
+        for change in diff {
+            switch change {
+            case .equal(let text):
                     // 如果有累積的插入或刪除，先處理它們
                     if !currentInsert.isEmpty || !currentDelete.isEmpty {
                         mergeChanges()
                     }
                     // 累積相等部分
-                    currentEqual += text
-                    
-                case .insert(let text):
+                currentEqual += text
+                
+            case .insert(let text):
                     // 如果有累積的相等部分，先添加到結果
-                    if !currentEqual.isEmpty {
+                if !currentEqual.isEmpty {
                         result.append(.equal(currentEqual))
-                        currentEqual = ""
-                    }
-                    // 累積插入部分
-                    currentInsert += text
-                    
-                case .delete(let text):
-                    // 如果有累積的相等部分，先添加到結果
-                    if !currentEqual.isEmpty {
-                        result.append(.equal(currentEqual))
-                        currentEqual = ""
-                    }
-                    // 累積刪除部分
-                    currentDelete += text
+                    currentEqual = ""
                 }
+                    // 累積插入部分
+                currentInsert += text
+                
+            case .delete(let text):
+                    // 如果有累積的相等部分，先添加到結果
+                if !currentEqual.isEmpty {
+                        result.append(.equal(currentEqual))
+                    currentEqual = ""
+                }
+                    // 累積刪除部分
+                currentDelete += text
             }
-            
+        }
+        
             // 處理剩餘的累積變更
             if !currentEqual.isEmpty {
                 result.append(.equal(currentEqual))
@@ -351,10 +351,18 @@ class TextProcessing: @unchecked Sendable {
     
     // 優化差異函數以改善記憶體管理
     static func diffStrings(_ old: String, _ new: String) -> [DiffChange] {
+        // 基本檢查以避免處理不必要的情況
         if old.isEmpty && new.isEmpty { return [] }
         if old.isEmpty { return [.insert(new)] }
         if new.isEmpty { return [.delete(old)] }
         if old == new { return [.equal(old)] }
+        
+        // 檢查文本長度是否超過安全閾值
+        let maxSafeLength = 15000
+        if old.count > maxSafeLength || new.count > maxSafeLength {
+            // 對於非常長的文本，採用分塊比較策略
+            return diffLongStrings(old, new)
+        }
         
         // 使用高效能的字串比較，避免過多的記憶體分配
         var result = [DiffChange]()
@@ -367,7 +375,7 @@ class TextProcessing: @unchecked Sendable {
             let oldChars = Array(old)
             let newChars = Array(new)
             
-            // 創建動態規劃表
+            // 創建動態規劃表 - 使用較小的記憶體空間
             var dp = [[Int]](repeating: [Int](repeating: 0, count: newChars.count + 1), count: oldChars.count + 1)
             
             // 填充dp表
@@ -379,7 +387,7 @@ class TextProcessing: @unchecked Sendable {
                         dp[i][j] = i
                     } else if oldChars[i-1] == newChars[j-1] {
                         dp[i][j] = dp[i-1][j-1]
-                    } else {
+            } else {
                         dp[i][j] = min(dp[i-1][j], dp[i][j-1]) + 1
                     }
                 }
@@ -396,51 +404,195 @@ class TextProcessing: @unchecked Sendable {
             // 使用回溯法找出最短編輯序列
             while i > 0 || j > 0 {
                 if i > 0 && j > 0 && oldChars[i-1] == newChars[j-1] {
-                    // 相同字元
+                    // 字符相同，添加到相等部分
                     currentEqual = String(oldChars[i-1]) + currentEqual
                     i -= 1
                     j -= 1
                 } else {
-                    // 提交當前累積的相同部分
-                    if !currentEqual.isEmpty {
-                        result.insert(.equal(currentEqual), at: 0)
-                        currentEqual = ""
-                    }
-                    
+                    // 處理插入或刪除
                     if j > 0 && (i == 0 || dp[i][j-1] <= dp[i-1][j]) {
-                        // 插入操作
+                        // 插入
                         currentInsert = String(newChars[j-1]) + currentInsert
                         j -= 1
                     } else if i > 0 {
-                        // 刪除操作
+                        // 刪除
                         currentDelete = String(oldChars[i-1]) + currentDelete
                         i -= 1
                     }
                     
-                    // 檢查是否需要提交當前累積的插入/刪除部分
-                    if (i > 0 && j > 0 && oldChars[i-1] == newChars[j-1]) || (i == 0 && j == 0) {
+                    // 如果已累積足夠的變更或遇到換行符，則輸出當前變更
+                    if (currentEqual.count > 0 && (currentInsert.contains("\n") || currentDelete.contains("\n"))) ||
+                       currentEqual.count > 200 || currentInsert.count > 200 || currentDelete.count > 200 {
+                        
+                        // 先處理刪除和插入
                         if !currentDelete.isEmpty {
-                            result.insert(.delete(currentDelete), at: 0)
+                            result.append(.delete(currentDelete))
                             currentDelete = ""
                         }
+                        
                         if !currentInsert.isEmpty {
-                            result.insert(.insert(currentInsert), at: 0)
+                            result.append(.insert(currentInsert))
                             currentInsert = ""
+                        }
+                        
+                        // 再處理相等部分
+                        if !currentEqual.isEmpty {
+                            result.append(.equal(currentEqual))
+                            currentEqual = ""
                         }
                     }
                 }
             }
             
-            // 處理結尾剩餘部分
-            if !currentEqual.isEmpty {
-                result.insert(.equal(currentEqual), at: 0)
-            }
+            // 處理剩餘的變更
             if !currentDelete.isEmpty {
-                result.insert(.delete(currentDelete), at: 0)
+                result.append(.delete(currentDelete))
             }
+            
             if !currentInsert.isEmpty {
-                result.insert(.insert(currentInsert), at: 0)
+                result.append(.insert(currentInsert))
             }
+            
+            if !currentEqual.isEmpty {
+                result.append(.equal(currentEqual))
+            }
+        }
+        
+        // 反轉結果以獲得正確的順序（因為回溯是從尾部開始的）
+        return result.reversed()
+    }
+    
+    // 新增一個方法處理超長文本，將文本分塊比較
+    private static func diffLongStrings(_ old: String, _ new: String) -> [DiffChange] {
+        // 分塊大小
+        let chunkSize = 5000
+        
+        // 使用自然段落邊界分割文本
+        let oldParagraphs = old.components(separatedBy: "\n")
+        let newParagraphs = new.components(separatedBy: "\n")
+        
+        var result = [DiffChange]()
+        
+        // 使用段落分塊，而不是硬性分割文本
+        var oldChunks = [String]()
+        var newChunks = [String]()
+        
+        // 構建舊文本的塊
+        var currentChunk = ""
+        for paragraph in oldParagraphs {
+            let paragraphWithNewline = paragraph + "\n"
+            if currentChunk.count + paragraphWithNewline.count <= chunkSize {
+                currentChunk += paragraphWithNewline
+                } else {
+                if !currentChunk.isEmpty {
+                    oldChunks.append(currentChunk)
+                }
+                currentChunk = paragraphWithNewline
+            }
+        }
+        if !currentChunk.isEmpty {
+            oldChunks.append(currentChunk)
+        }
+        
+        // 構建新文本的塊
+        currentChunk = ""
+        for paragraph in newParagraphs {
+            let paragraphWithNewline = paragraph + "\n"
+            if currentChunk.count + paragraphWithNewline.count <= chunkSize {
+                currentChunk += paragraphWithNewline
+            } else {
+                if !currentChunk.isEmpty {
+                    newChunks.append(currentChunk)
+                }
+                currentChunk = paragraphWithNewline
+            }
+        }
+        if !currentChunk.isEmpty {
+            newChunks.append(currentChunk)
+        }
+        
+        // 分別比較每個塊
+        if oldChunks.count == 1 && newChunks.count == 1 {
+            // 如果只有一個塊，直接使用基本比較
+            return simplifiedDiffStrings(oldChunks[0], newChunks[0])
+        } else {
+            // 否則，分別比較每個塊並合併結果
+            for i in 0..<min(oldChunks.count, newChunks.count) {
+                let chunkDiff = simplifiedDiffStrings(oldChunks[i], newChunks[i])
+                result.append(contentsOf: chunkDiff)
+            }
+            
+            // 處理剩餘的塊
+            if oldChunks.count > newChunks.count {
+                for i in newChunks.count..<oldChunks.count {
+                    result.append(.delete(oldChunks[i]))
+                }
+            } else if newChunks.count > oldChunks.count {
+                for i in oldChunks.count..<newChunks.count {
+                    result.append(.insert(newChunks[i]))
+                }
+            }
+        }
+        
+        return result
+    }
+    
+    // 簡化版的diff算法，用於處理分塊後的文本比較
+    private static func simplifiedDiffStrings(_ old: String, _ new: String) -> [DiffChange] {
+        // 基本檢查
+        if old.isEmpty && new.isEmpty { return [] }
+        if old.isEmpty { return [.insert(new)] }
+        if new.isEmpty { return [.delete(old)] }
+        if old == new { return [.equal(old)] }
+        
+        // 對較短的文本，使用更簡單的比較方法
+        var result = [DiffChange]()
+        
+        // 尋找相同的前綴和後綴
+        var prefixLength = 0
+        let minLength = min(old.count, new.count)
+        
+        // 找出相同的前綴長度
+        while prefixLength < minLength && 
+              old[old.index(old.startIndex, offsetBy: prefixLength)] == 
+              new[new.index(new.startIndex, offsetBy: prefixLength)] {
+            prefixLength += 1
+        }
+        
+        // 找出相同的後綴長度
+        var suffixLength = 0
+        while suffixLength < minLength - prefixLength &&
+              old[old.index(old.endIndex, offsetBy: -suffixLength - 1)] ==
+              new[new.index(new.endIndex, offsetBy: -suffixLength - 1)] {
+            suffixLength += 1
+        }
+        
+        // 添加相同的前綴
+        if prefixLength > 0 {
+            let prefix = String(old.prefix(prefixLength))
+            result.append(.equal(prefix))
+        }
+        
+        // 添加中間不同的部分
+        let oldMiddleStart = old.index(old.startIndex, offsetBy: prefixLength)
+        let oldMiddleEnd = old.index(old.endIndex, offsetBy: -suffixLength)
+        let newMiddleStart = new.index(new.startIndex, offsetBy: prefixLength)
+        let newMiddleEnd = new.index(new.endIndex, offsetBy: -suffixLength)
+        
+        if oldMiddleStart < oldMiddleEnd {
+            let oldMiddle = String(old[oldMiddleStart..<oldMiddleEnd])
+            result.append(.delete(oldMiddle))
+        }
+        
+        if newMiddleStart < newMiddleEnd {
+            let newMiddle = String(new[newMiddleStart..<newMiddleEnd])
+            result.append(.insert(newMiddle))
+        }
+        
+        // 添加相同的後綴
+        if suffixLength > 0 {
+            let suffix = String(old.suffix(suffixLength))
+            result.append(.equal(suffix))
         }
         
         return result

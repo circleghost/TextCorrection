@@ -52,8 +52,8 @@ enum OpenAIError: Error, LocalizedError {
     }
 }
 
-// 完整的類實現，而不是擴展
-class OpenAIService: @unchecked Sendable {
+// 使用 Actor 確保線程安全
+actor OpenAIService {
     // 日誌對象
     private let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "OpenAIService")
     
@@ -150,13 +150,12 @@ class OpenAIService: @unchecked Sendable {
     }
     
     // 使用流式API處理文本，通過回調提供更新
-    @Sendable
     func streamOpenAiApi(
         text: String, 
         apiKeyProvider: @Sendable @escaping () -> String, 
         systemPrompt: String = "", 
-        onNewContent: @escaping (String) -> Void,
-        onError: @escaping (OpenAIError) -> Void = { _ in }
+        onNewContent: @Sendable @escaping (String) -> Void,
+        onError: @Sendable @escaping (OpenAIError) -> Void = { _ in }
     ) async throws {
         logger.debug("準備 API 請求...")
         
@@ -327,8 +326,7 @@ class OpenAIService: @unchecked Sendable {
         }
     }
     
-    @Sendable
-    func testApiKey(apiKeyProvider: @escaping () -> String) async throws -> Bool {
+    func testApiKey(apiKeyProvider: @Sendable @escaping () -> String) async throws -> Bool {
         let url = URL(string: "https://api.openai.com/v1/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -341,5 +339,16 @@ class OpenAIService: @unchecked Sendable {
         }
         
         return false
+    }
+    
+    /// 檢查服務是否可用
+    nonisolated func isAvailable() -> Bool {
+        // 檢查是否有有效的API密鑰
+        if UserDefaults.standard.string(forKey: "openai_api_key")?.isEmpty ?? true {
+            return false
+        }
+        
+        // 注意：這裡簡化實現，實際應該通過 async 方法獲取網路狀態
+        return true // 簡化實現，避免跨隔離域訪問
     }
 }

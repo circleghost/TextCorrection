@@ -1,4 +1,0 @@
-module Differ {
-header "Differ-Swift.h"
-export *
-}

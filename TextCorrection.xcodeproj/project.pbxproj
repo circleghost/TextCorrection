@@ -13,6 +13,7 @@
 		474F41E72D8953B8009BA3CF /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474F41E52D8953B8009BA3CF /* NotificationManager.swift */; };
 		474F41E82D8953B8009BA3CF /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474F41E42D8953B8009BA3CF /* FeedbackView.swift */; };
 		474F41E92D8953B8009BA3CF /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474F41E62D8953B8009BA3CF /* WelcomeView.swift */; };
+		4767C03D2D8EF817008D5573 /* NSTextView+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4767C03C2D8EF817008D5573 /* NSTextView+Extension.swift */; };
 		477781612D88806B0053BA9A /* Magnet in Frameworks */ = {isa = PBXBuildFile; productRef = 477781602D88806B0053BA9A /* Magnet */; };
 		47826FBA2C8F5A4500D2D8F4 /* OpenAIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */; };
 		47826FBB2C8F5A4500D2D8F4 /* TextCorrectionError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */; };
@@ -73,6 +74,7 @@
 		474F41E42D8953B8009BA3CF /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		474F41E52D8953B8009BA3CF /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		474F41E62D8953B8009BA3CF /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		4767C03C2D8EF817008D5573 /* NSTextView+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSTextView+Extension.swift"; sourceTree = "<group>"; };
 		47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OpenAIModels.swift; sourceTree = "<group>"; };
 		47826FAF2C8F5A4400D2D8F4 /* TextCorrectionError.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextCorrectionError.swift; sourceTree = "<group>"; };
 		47826FB02C8F5A4400D2D8F4 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				47D34C202D89681B00EB51AE /* LogManager.swift */,
 				47D34C212D89681B00EB51AE /* LogsView.swift */,
 				479850822D802E770027DFE3 /* NSColor+Extensions.swift */,
+				4767C03C2D8EF817008D5573 /* NSTextView+Extension.swift */,
 				47826FAE2C8F5A4400D2D8F4 /* OpenAIModels.swift */,
 				47826FB12C8F5A4400D2D8F4 /* OpenAIService.swift */,
 				47826FB72C8F5A4500D2D8F4 /* PasteboardManager.swift */,
@@ -326,12 +329,12 @@
 			);
 			mainGroup = 478434132C8C38D500456192;
 			packageReferences = (
-				47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */,
 				47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */,
 				47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */,
 				47826FCB2C90317A00D2D8F4 /* XCRemoteSwiftPackageReference "PythonKit" */,
 				474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
 				4777815F2D88806B0053BA9A /* XCRemoteSwiftPackageReference "Magnet" */,
+				47176B392D905AFF00237383 /* XCRemoteSwiftPackageReference "HotKey" */,
 			);
 			productRefGroup = 4784341D2C8C38D500456192 /* Products */;
 			projectDirPath = "";
@@ -379,6 +382,7 @@
 			files = (
 				474F41E72D8953B8009BA3CF /* NotificationManager.swift in Sources */,
 				474F41E82D8953B8009BA3CF /* FeedbackView.swift in Sources */,
+				4767C03D2D8EF817008D5573 /* NSTextView+Extension.swift in Sources */,
 				474F41E92D8953B8009BA3CF /* WelcomeView.swift in Sources */,
 				47826FBF2C8F5A4500D2D8F4 /* AccessibilityManager.swift in Sources */,
 				478434222C8C38D500456192 /* ContentView.swift in Sources */,
@@ -729,9 +733,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		47176B392D905AFF00237383 /* XCRemoteSwiftPackageReference "HotKey" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soffes/HotKey";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		474CD3F22C92D0D900D3BD66 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess";
+			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess.git";
 			requirement = {
 				branch = master;
 				kind = branch;
@@ -747,7 +759,7 @@
 		};
 		47826FC82C901C7B00D2D8F4 /* XCRemoteSwiftPackageReference "Differ" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tonyarnold/Differ";
+			repositoryURL = "https://github.com/tonyarnold/Differ.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.4.6;
@@ -761,7 +773,7 @@
 				kind = branch;
 			};
 		};
-		47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */ = {
+		47C0862E2C8CC27D00030313 /* XCRemoteSwiftPackageReference "HotKey" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soffes/HotKey";
 			requirement = {
@@ -771,7 +783,7 @@
 		};
 		47C086312C8DB15700030313 /* XCRemoteSwiftPackageReference "DifferenceKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ra1028/DifferenceKit";
+			repositoryURL = "https://github.com/ra1028/DifferenceKit.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.3.0;
@@ -802,7 +814,7 @@
 		};
 		47C0862F2C8CC27D00030313 /* HotKey */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 47C0862E2C8CC1E600030313 /* XCRemoteSwiftPackageReference "HotKey" */;
+			package = 47C0862E2C8CC27D00030313 /* XCRemoteSwiftPackageReference "HotKey" */;
 			productName = HotKey;
 		};
 		47C086322C8DB15700030313 /* DifferenceKit */ = {
