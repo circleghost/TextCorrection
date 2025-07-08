@@ -285,23 +285,38 @@ class LogsViewModel: ObservableObject {
     @Published var logs: [LogManager.LogEntry] = []
     @Published var filteredLogs: [LogManager.LogEntry] = []
     @Published var selectedLevel: LogManager.LogLevel? = nil {
-        didSet { filterLogs() }
+        didSet { 
+            Task { @MainActor in
+                filterLogs()
+            }
+        }
     }
     @Published var selectedCategory: String? = nil {
-        didSet { filterLogs() }
+        didSet { 
+            Task { @MainActor in
+                filterLogs()
+            }
+        }
     }
     @Published var searchText: String = "" {
-        didSet { filterLogs() }
+        didSet { 
+            Task { @MainActor in
+                filterLogs()
+            }
+        }
     }
     @Published var categories: [String] = []
     @Published var minimumLogLevel: LogManager.LogLevel = .info
     
     init() {
-        refreshLogs()
-        minimumLogLevel = LogManager.shared.minimumLogLevel
+        Task { @MainActor in
+            refreshLogs()
+            minimumLogLevel = LogManager.shared.minimumLogLevel
+        }
     }
     
     /// 刷新日誌
+    @MainActor
     func refreshLogs() {
         logs = LogManager.shared.logEntries
         categories = LogManager.shared.getAllCategories()
@@ -309,6 +324,7 @@ class LogsViewModel: ObservableObject {
     }
     
     /// 過濾日誌
+    @MainActor
     private func filterLogs() {
         filteredLogs = LogManager.shared.getFilteredLogs(
             level: selectedLevel,
@@ -318,6 +334,7 @@ class LogsViewModel: ObservableObject {
     }
     
     /// 清空日誌
+    @MainActor
     func clearLogs() {
         LogManager.shared.clearLogs()
         refreshLogs()

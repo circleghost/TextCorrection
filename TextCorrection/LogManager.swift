@@ -151,7 +151,9 @@ class LogManager {
         autoSaveTimer?.invalidate()
         
         autoSaveTimer = Timer.scheduledTimer(withTimeInterval: saveInterval, repeats: true) { [weak self] _ in
-            self?.saveLogsToFile()
+            Task { @MainActor in
+                self?.saveLogsToFile()
+            }
         }
     }
     
@@ -468,6 +470,7 @@ class LogManager {
 /// 擴展 Logger 以整合 LogManager
 extension Logger {
     /// 使用 LogManager 記錄日誌
+    @MainActor
     func logWithManager(level: LogManager.LogLevel, message: String) {
         // 同時使用系統日誌
         self.log(level: level.osLogType, "\(message)")
@@ -477,36 +480,43 @@ extension Logger {
     }
     
     /// 調試級別日誌
+    @MainActor
     func debugWithManager(_ message: String) {
         logWithManager(level: .debug, message: message)
     }
     
     /// 信息級別日誌
+    @MainActor
     func infoWithManager(_ message: String) {
         logWithManager(level: .info, message: message)
     }
     
     /// 通知級別日誌
+    @MainActor
     func noticeWithManager(_ message: String) {
         logWithManager(level: .notice, message: message)
     }
     
     /// 警告級別日誌
+    @MainActor
     func warningWithManager(_ message: String) {
         logWithManager(level: .warning, message: message)
     }
     
     /// 錯誤級別日誌
+    @MainActor
     func errorWithManager(_ message: String) {
         logWithManager(level: .error, message: message)
     }
     
     /// 嚴重錯誤級別日誌
+    @MainActor
     func faultWithManager(_ message: String) {
         logWithManager(level: .fault, message: message)
     }
     
     // 增強的日誌記錄方法，自動整合到 LogManager
+    @MainActor
     func customLog(level: OSLogType, message: String, file: String = #file, function: String = #function, line: Int = #line) {
         // 使用系統日誌記錄
         self.log(level: level, "\(message)")
