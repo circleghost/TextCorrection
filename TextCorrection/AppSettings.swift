@@ -19,6 +19,9 @@ class AppSettings: ObservableObject {
         static let textSizeLimit = "text_size_limit"
         static let autoCorrect = "auto_correct"
         static let startAtLogin = "start_at_login"
+        static let selectedModel = "selected_model"
+        static let openaiApiKey = "openai_api_key"
+        static let geminiApiKey = "gemini_api_key"
     }
     
     /// 忽略字詞列表
@@ -102,6 +105,62 @@ class AppSettings: ObservableObject {
             ignoreWords = updatedList
             logger.debug("已刪除忽略字詞: \(word)")
         }
+    }
+    
+    /// 選擇的 AI 模型
+    var selectedModel: AIModel {
+        get {
+            if let modelString = UserDefaults.standard.string(forKey: UserDefaultsKeys.selectedModel),
+               let model = AIModel(rawValue: modelString) {
+                return model
+            }
+            return .gpt41 // 默認使用 GPT-4.1
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue.rawValue, forKey: UserDefaultsKeys.selectedModel)
+            logger.debug("已選擇模型: \(newValue.displayName)")
+        }
+    }
+    
+    /// OpenAI API Key
+    var openaiApiKey: String {
+        get {
+            return UserDefaults.standard.string(forKey: UserDefaultsKeys.openaiApiKey) ?? ""
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.openaiApiKey)
+            logger.debug("OpenAI API Key 已更新")
+        }
+    }
+    
+    /// Gemini API Key
+    var geminiApiKey: String {
+        get {
+            return UserDefaults.standard.string(forKey: UserDefaultsKeys.geminiApiKey) ?? ""
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.geminiApiKey)
+            logger.debug("Gemini API Key 已更新")
+        }
+    }
+    
+    /// 根據選擇的模型獲取對應的 API Key
+    func getAPIKeyForSelectedModel() -> String {
+        switch selectedModel.provider {
+        case .openai:
+            return openaiApiKey
+        case .gemini:
+            return geminiApiKey
+        }
+    }
+    
+    /// 檢查選擇的模型是否有有效的 API Key
+    func hasValidAPIKeyForSelectedModel() -> Bool {
+        let apiKey = getAPIKeyForSelectedModel()
+        return !apiKey.isEmpty && apiKey.count > 10 // 簡單的長度檢查
     }
     
     /// 配置是否開機啟動

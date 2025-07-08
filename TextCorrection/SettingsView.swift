@@ -411,110 +411,180 @@ struct SettingsView: View {
     
     // API設定視圖
     private var apiSettingsView: some View {
-        VStack(alignment: .leading, spacing: UIConstants.spacing) {
-            // API 金鑰配置區域
+        VStack(alignment: .leading, spacing: UIConstants.sectionSpacing) {
+            // 模型選擇區域
             VStack(alignment: .leading, spacing: UIConstants.spacing) {
-                Text("OpenAI API 設定")
+                Text("AI 模型設定")
                     .font(UIConstants.sectionFont)
                     .padding(.horizontal, UIConstants.spacing)
                 
                 VStack(alignment: .leading, spacing: UIConstants.spacing) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("API 金鑰")
+                        Text("選擇 AI 模型")
                             .font(UIConstants.bodyFont.weight(.medium))
                         
-                        // API 金鑰輸入框，使用安全字段
-                        SecureField("輸入你的 OpenAI API 金鑰", text: $apiKey)
-                            .font(.system(.body, design: .monospaced))
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .disableAutocorrection(true)
-                            .padding(.bottom, 4)
-                        
-                        HStack {
-                            // 添加 OpenAI API 網站連結
-                            Link(destination: URL(string: "https://platform.openai.com/api-keys")!) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "link")
-                                        .font(.system(size: 12))
-                                    Text("前往 OpenAI API 頁面申請")
-                                        .font(UIConstants.captionFont)
-                                        .underline()
-                                }
-                                .foregroundColor(UIConstants.primaryColor)
-                            }
-                            
-                            Spacer()
-                        }
-                    }
-                    
-                    // 直接前往 OpenAI 網站的按鈕
-                    Button(action: {
-                        if let url = URL(string: "https://platform.openai.com/api-keys") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "safari")
-                            Text("在瀏覽器中開啟 OpenAI API 申請頁面")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(LinearButtonStyle(isPrimary: false))
-                    .padding(.bottom, 10)
-                    
-                    // 金鑰驗證按鈕
-                    HStack {
-                        Button(action: {
-                            validateApiKey()
-                        }) {
-                            HStack {
-                                Image(systemName: isValidating ? "circle.dashed" : "checkmark.seal")
-                                    .rotationEffect(isValidating ? .degrees(0) : .degrees(0))
-                                    .animation(isValidating ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isValidating)
-                                
-                                Text(isValidating ? "驗證中..." : "驗證 API 金鑰")
+                        Picker("選擇模型", selection: $appSettings.selectedModel) {
+                            ForEach(AIModel.allCases, id: \.self) { model in
+                                Text(model.displayName).tag(model)
                             }
                         }
-                        .buttonStyle(LinearButtonStyle())
-                        .disabled(apiKey.isEmpty || isValidating)
+                        .pickerStyle(MenuPickerStyle())
+                        .padding(.bottom, 4)
                         
-                        Spacer()
-                        
-                        Button(action: {
-                            saveApiKey()
-                        }) {
-                            HStack {
-                                Image(systemName: "checkmark.circle")
-                                Text("儲存")
-                            }
-                        }
-                        .buttonStyle(LinearButtonStyle())
-                        .disabled(apiKey.isEmpty || isValidating)
-                    }
-                    
-                    // 驗證訊息顯示
-                    if showMessage {
-                        Text(message)
+                        Text("選擇的模型：\(appSettings.selectedModel.displayName)")
                             .font(UIConstants.captionFont)
-                            .foregroundColor(isSuccess ? UIConstants.successColor : UIConstants.dangerColor)
-                            .padding(.top, 4)
+                            .foregroundColor(.secondary)
                     }
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(NSColor.controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
-                .padding(.horizontal, UIConstants.spacing)
+                .cardStyle()
             }
             
-            Spacer()
+            // OpenAI API 設定
+            if appSettings.selectedModel.provider == .openai {
+                openAIApiSettingsView
+            }
+            
+            // Gemini API 設定
+            if appSettings.selectedModel.provider == .gemini {
+                geminiApiSettingsView
+            }
+            
+            // 驗證訊息顯示
+            if showMessage {
+                HStack {
+                    Image(systemName: isSuccess ? "checkmark.circle" : "xmark.circle")
+                        .foregroundColor(isSuccess ? UIConstants.successColor : UIConstants.dangerColor)
+                    
+                    Text(message)
+                        .font(UIConstants.captionFont)
+                        .foregroundColor(isSuccess ? UIConstants.successColor : UIConstants.dangerColor)
+                }
+                .padding(.horizontal, UIConstants.spacing)
+            }
         }
-        .padding(.bottom, UIConstants.spacing)
+    }
+    
+    // OpenAI API 設定視圖
+    private var openAIApiSettingsView: some View {
+        VStack(alignment: .leading, spacing: UIConstants.spacing) {
+            Text("OpenAI API 設定")
+                .font(UIConstants.sectionFont)
+                .padding(.horizontal, UIConstants.spacing)
+            
+            VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("OpenAI API 金鑰")
+                        .font(UIConstants.bodyFont.weight(.medium))
+                    
+                    SecureField("輸入你的 OpenAI API 金鑰", text: $appSettings.openaiApiKey)
+                        .font(.system(.body, design: .monospaced))
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disableAutocorrection(true)
+                        .padding(.bottom, 4)
+                    
+                    HStack {
+                        Link(destination: URL(string: "https://platform.openai.com/api-keys")!) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 12))
+                                Text("前往 OpenAI API 頁面申請")
+                                    .font(UIConstants.captionFont)
+                                    .underline()
+                            }
+                            .foregroundColor(UIConstants.primaryColor)
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                
+                apiActionButtons(provider: .openai)
+            }
+            .cardStyle()
+        }
+    }
+    
+    // Gemini API 設定視圖
+    private var geminiApiSettingsView: some View {
+        VStack(alignment: .leading, spacing: UIConstants.spacing) {
+            Text("Gemini API 設定")
+                .font(UIConstants.sectionFont)
+                .padding(.horizontal, UIConstants.spacing)
+            
+            VStack(alignment: .leading, spacing: UIConstants.spacing) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Gemini API 金鑰")
+                        .font(UIConstants.bodyFont.weight(.medium))
+                    
+                    SecureField("輸入你的 Gemini API 金鑰", text: $appSettings.geminiApiKey)
+                        .font(.system(.body, design: .monospaced))
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disableAutocorrection(true)
+                        .padding(.bottom, 4)
+                    
+                    HStack {
+                        Link(destination: URL(string: "https://makersuite.google.com/app/apikey")!) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 12))
+                                Text("前往 Google AI Studio 申請")
+                                    .font(UIConstants.captionFont)
+                                    .underline()
+                            }
+                            .foregroundColor(UIConstants.primaryColor)
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                
+                apiActionButtons(provider: .gemini)
+            }
+            .cardStyle()
+        }
+    }
+    
+    // API 操作按鈕
+    private func apiActionButtons(provider: AIProvider) -> some View {
+        HStack {
+            Button(action: {
+                validateApiKey(for: provider)
+            }) {
+                HStack {
+                    Image(systemName: isValidating ? "circle.dashed" : "checkmark.seal")
+                        .rotationEffect(isValidating ? .degrees(0) : .degrees(0))
+                        .animation(isValidating ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isValidating)
+                    
+                    Text(isValidating ? "驗證中..." : "驗證 API 金鑰")
+                }
+            }
+            .buttonStyle(LinearButtonStyle())
+            .disabled(getApiKeyForProvider(provider).isEmpty || isValidating)
+            
+            Spacer()
+            
+            Button(action: {
+                if let url = URL(string: provider == .openai ? "https://platform.openai.com/api-keys" : "https://makersuite.google.com/app/apikey") {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                HStack {
+                    Image(systemName: "safari")
+                    Text("在瀏覽器中開啟")
+                }
+            }
+            .buttonStyle(LinearButtonStyle(isPrimary: false))
+        }
+    }
+    
+    // 獲取指定提供商的 API 金鑰
+    private func getApiKeyForProvider(_ provider: AIProvider) -> String {
+        switch provider {
+        case .openai:
+            return appSettings.openaiApiKey
+        case .gemini:
+            return appSettings.geminiApiKey
+        }
     }
     
     // 進階設定視圖
@@ -841,37 +911,27 @@ struct SettingsView: View {
         }
     }
     
-    // 驗證API金鑰
-    private func validateApiKey() {
-        guard !apiKey.isEmpty else { return }
+    // 驗證API金鑰（支持多個提供商）
+    private func validateApiKey(for provider: AIProvider) {
+        let currentApiKey = getApiKeyForProvider(provider)
+        guard !currentApiKey.isEmpty else { return }
         
-        logger.debug("正在驗證API金鑰")
+        logger.debug("正在驗證 \(provider.displayName) API金鑰")
         isValidating = true
-        
-        // 這裡需要先保存API金鑰，然後進行驗證
-        do {
-            try keychain.set(apiKey, key: "OpenAIApiKey")
-            logger.debug("API 金鑰已保存至鑰匙圈，準備進行驗證")
-        } catch {
-            logger.error("保存 API 金鑰失敗: \(error.localizedDescription)")
-            showErrorMessage("無法保存 API 金鑰: \(error.localizedDescription)")
-            isValidating = false
-            return
-        }
         
         // 使用Task異步執行API驗證
         Task {
             do {
-                // 使用OpenAIService進行實際API驗證
-                try await openAIService.validateAPIKey(apiKey)
+                // 使用新的 AIService 進行實際API驗證
+                try await AIService.shared.validateAPIKey(currentApiKey, for: provider)
                 
                 // 在主線程更新UI
                 await MainActor.run {
                     appState.safelyUpdate(\.isApiKeyValid, value: true)
-                    showSuccessMessage("API 金鑰驗證成功")
+                    showSuccessMessage("\(provider.displayName) API 金鑰驗證成功")
                     isValidating = false
                 }
-            } catch let apiError as OpenAIError {
+            } catch let apiError as AIServiceError {
                 await MainActor.run {
                     appState.safelyUpdate(\.isApiKeyValid, value: false)
                     var errorMessage = "API 金鑰驗證失敗"
@@ -887,6 +947,8 @@ struct SettingsView: View {
                         errorMessage = "客戶端錯誤: \(message)"
                     case .networkError:
                         errorMessage = "網絡連接錯誤，請檢查網絡連接"
+                    case .networkUnavailable:
+                        errorMessage = "網絡不可用，請檢查網絡連接"
                     default:
                         errorMessage = "驗證失敗: \(apiError.localizedDescription)"
                     }
