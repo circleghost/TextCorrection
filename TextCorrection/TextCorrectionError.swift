@@ -1,6 +1,6 @@
 import Foundation
 
-enum TextCorrectionError: Error, @unchecked Sendable {
+enum TextCorrectionError: Error, Sendable {
     case apiKeyNotSet
     case invalidResponse
     case apiError(statusCode: Int)

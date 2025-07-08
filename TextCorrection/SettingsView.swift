@@ -151,7 +151,7 @@ extension View {
 }
 
 // MARK: - 主視圖
-struct SettingsView: View, @unchecked Sendable {
+struct SettingsView: View {
     @State private var apiKey: String = ""
     @State private var isSaving: Bool = false
     @State private var message: String = ""

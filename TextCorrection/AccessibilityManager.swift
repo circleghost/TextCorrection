@@ -3,7 +3,8 @@ import ApplicationServices
 import os.log
 
 /// 輔助功能和權限管理器
-class AccessibilityManager: @unchecked Sendable {
+@MainActor
+class AccessibilityManager {
     // 日誌對象
     private static let logger = Logger(subsystem: "com.yourcompany.TextCorrection", category: "AccessibilityManager")
     

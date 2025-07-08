@@ -24,7 +24,7 @@ import AppKit
 // }
 
 /// 顯示文本差異的NSViewRepresentable包裝器
-struct TextDifferenceView: NSViewRepresentable, @unchecked Sendable {
+struct TextDifferenceView: NSViewRepresentable {
     var originalText: String
     var correctedText: String
     
@@ -251,7 +251,7 @@ struct ParticleEffectView: View {
 }
 
 /// 主文本校正視圖
-struct TextCorrectionView: View, @unchecked Sendable {
+struct TextCorrectionView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showingSettings = false
     @State private var showCopySuccessIndicator = false

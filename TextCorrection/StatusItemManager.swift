@@ -7,7 +7,8 @@ import SwiftUI
 // import TextCorrection
 // #endif
 
-class StatusItemManager: @unchecked Sendable {
+@MainActor
+class StatusItemManager {
     weak var appDelegate: AppDelegate?
     var statusItem: NSStatusItem!
     private var setupRetryCount = 0

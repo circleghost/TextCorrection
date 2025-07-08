@@ -7,7 +7,8 @@ import Combine
 import SwiftUI
 
 // 完整的類實現，而不是擴展
-class HotKeyManager: @unchecked Sendable {
+@MainActor
+class HotKeyManager {
     weak var appDelegate: AppDelegate?
     var cancellables = Set<AnyCancellable>()
     var hotKey: HotKey?

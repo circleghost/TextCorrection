@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PreferencesView: View, @unchecked Sendable {
+struct PreferencesView: View {
     @AppStorage("OPENAI_API_KEY") private var apiKey: String = ""
     @State private var showAlert = false
     @State private var alertMessage = ""

@@ -3,7 +3,7 @@ import os.log
 
 // 將整個類標記為 @MainActor，因為它主要處理 UI 元素
 @MainActor
-class TextWindowManager: @unchecked Sendable, ObservableObject {
+class TextWindowManager: ObservableObject {
     weak var appDelegate: AppDelegate?
     
     // 將靜態屬性移到類別級別
