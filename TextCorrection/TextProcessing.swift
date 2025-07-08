@@ -349,7 +349,7 @@ struct TextProcessing {
         return result
     }
     
-    // 優化差異函數以改善記憶體管理
+    // 優化差異函數以改善記憶體管理和效能
     static func diffStrings(_ old: String, _ new: String) -> [DiffChange] {
         // 基本檢查以避免處理不必要的情況
         if old.isEmpty && new.isEmpty { return [] }
@@ -357,109 +357,116 @@ struct TextProcessing {
         if new.isEmpty { return [.delete(old)] }
         if old == new { return [.equal(old)] }
         
-        // 檢查文本長度是否超過安全閾值
-        let maxSafeLength = 15000
+        // 檢查文本長度是否超過安全閾值，降低閾值以提高效能
+        let maxSafeLength = 8000
         if old.count > maxSafeLength || new.count > maxSafeLength {
             // 對於非常長的文本，採用分塊比較策略
             return diffLongStrings(old, new)
         }
         
-        // 使用高效能的字串比較，避免過多的記憶體分配
-        var result = [DiffChange]()
-        
-        // 改進：預先分配容量，減少記憶體重分配
-        result.reserveCapacity(max(old.count, new.count) / 5) // 粗估字元變更數
-        
-        // 使用autoreleasepool確保中間字串及時釋放
-        autoreleasepool {
+        // 使用 Myers 差異演算法的優化版本
+        return autoreleasepool {
+            // 將字串轉換為字元陣列以提高存取效能
             let oldChars = Array(old)
             let newChars = Array(new)
             
-            // 創建動態規劃表 - 使用較小的記憶體空間
-            var dp = [[Int]](repeating: [Int](repeating: 0, count: newChars.count + 1), count: oldChars.count + 1)
-            
-            // 填充dp表
-            for i in 0...oldChars.count {
-                for j in 0...newChars.count {
-                    if i == 0 {
-                        dp[i][j] = j
-                    } else if j == 0 {
-                        dp[i][j] = i
-                    } else if oldChars[i-1] == newChars[j-1] {
-                        dp[i][j] = dp[i-1][j-1]
+            // 使用 Myers 演算法進行優化的差異計算
+            return myersDiff(oldChars: oldChars, newChars: newChars)
+        }
+    }
+    
+    // 實作 Myers 差異演算法的簡化版本
+    private static func myersDiff(oldChars: [Character], newChars: [Character]) -> [DiffChange] {
+        let n = oldChars.count
+        let m = newChars.count
+        
+        // 如果任一字串為空，處理簡單情況
+        if n == 0 { return [.insert(String(newChars))] }
+        if m == 0 { return [.delete(String(oldChars))] }
+        
+        // 找出最長共同子序列 (LCS)
+        let lcs = findLCS(oldChars, newChars)
+        
+        // 根據 LCS 建構差異
+        var result = [DiffChange]()
+        var i = 0, j = 0, k = 0
+        
+        while i < n || j < m {
+            // 如果還有 LCS 元素要處理
+            if k < lcs.count && i < n && j < m && 
+               oldChars[i] == newChars[j] && oldChars[i] == lcs[k] {
+                // 找到匹配的字元
+                result.append(.equal(String(oldChars[i])))
+                i += 1
+                j += 1
+                k += 1
+            } else if k < lcs.count && i < n && oldChars[i] == lcs[k] {
+                // 在新字串中插入字元
+                result.append(.insert(String(newChars[j])))
+                j += 1
+            } else if k < lcs.count && j < m && newChars[j] == lcs[k] {
+                // 在舊字串中刪除字元
+                result.append(.delete(String(oldChars[i])))
+                i += 1
             } else {
-                        dp[i][j] = min(dp[i-1][j], dp[i][j-1]) + 1
-                    }
+                // 處理不匹配的字元
+                if i < n && j < m {
+                    // 替換（刪除 + 插入）
+                    result.append(.delete(String(oldChars[i])))
+                    result.append(.insert(String(newChars[j])))
+                    i += 1
+                    j += 1
+                } else if i < n {
+                    // 只有舊字串還有字元
+                    result.append(.delete(String(oldChars[i])))
+                    i += 1
+                } else if j < m {
+                    // 只有新字串還有字元
+                    result.append(.insert(String(newChars[j])))
+                    j += 1
                 }
-            }
-            
-            // 回溯找出差異
-            var i = oldChars.count
-            var j = newChars.count
-            
-            var currentEqual = ""
-            var currentDelete = ""
-            var currentInsert = ""
-            
-            // 使用回溯法找出最短編輯序列
-            while i > 0 || j > 0 {
-                if i > 0 && j > 0 && oldChars[i-1] == newChars[j-1] {
-                    // 字符相同，添加到相等部分
-                    currentEqual = String(oldChars[i-1]) + currentEqual
-                    i -= 1
-                    j -= 1
-                } else {
-                    // 處理插入或刪除
-                    if j > 0 && (i == 0 || dp[i][j-1] <= dp[i-1][j]) {
-                        // 插入
-                        currentInsert = String(newChars[j-1]) + currentInsert
-                        j -= 1
-                    } else if i > 0 {
-                        // 刪除
-                        currentDelete = String(oldChars[i-1]) + currentDelete
-                        i -= 1
-                    }
-                    
-                    // 如果已累積足夠的變更或遇到換行符，則輸出當前變更
-                    if (currentEqual.count > 0 && (currentInsert.contains("\n") || currentDelete.contains("\n"))) ||
-                       currentEqual.count > 200 || currentInsert.count > 200 || currentDelete.count > 200 {
-                        
-                        // 先處理刪除和插入
-                        if !currentDelete.isEmpty {
-                            result.append(.delete(currentDelete))
-                            currentDelete = ""
-                        }
-                        
-                        if !currentInsert.isEmpty {
-                            result.append(.insert(currentInsert))
-                            currentInsert = ""
-                        }
-                        
-                        // 再處理相等部分
-                        if !currentEqual.isEmpty {
-                            result.append(.equal(currentEqual))
-                            currentEqual = ""
-                        }
-                    }
-                }
-            }
-            
-            // 處理剩餘的變更
-            if !currentDelete.isEmpty {
-                result.append(.delete(currentDelete))
-            }
-            
-            if !currentInsert.isEmpty {
-                result.append(.insert(currentInsert))
-            }
-            
-            if !currentEqual.isEmpty {
-                result.append(.equal(currentEqual))
             }
         }
         
-        // 反轉結果以獲得正確的順序（因為回溯是從尾部開始的）
-        return result.reversed()
+        // 合併相鄰的相同操作
+        return mergeAdjacentChanges(result)
+    }
+    
+    // 找出最長共同子序列
+    private static func findLCS(_ a: [Character], _ b: [Character]) -> [Character] {
+        let m = a.count
+        let n = b.count
+        
+        // 使用空間優化的 LCS 演算法
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        
+        for i in 1...m {
+            for j in 1...n {
+                if a[i-1] == b[j-1] {
+                    dp[i][j] = dp[i-1][j-1] + 1
+                } else {
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+                }
+            }
+        }
+        
+        // 回溯找出 LCS
+        var lcs: [Character] = []
+        var i = m, j = n
+        
+        while i > 0 && j > 0 {
+            if a[i-1] == b[j-1] {
+                lcs.append(a[i-1])
+                i -= 1
+                j -= 1
+            } else if dp[i-1][j] > dp[i][j-1] {
+                i -= 1
+            } else {
+                j -= 1
+            }
+        }
+        
+        return lcs.reversed()
     }
     
     // 新增一個方法處理超長文本，將文本分塊比較

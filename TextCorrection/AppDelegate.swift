@@ -465,8 +465,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 
                 do {
-                    // 使用 StringBuilder 類型的結構來累積響應，避免頻繁的字符串拼接
-                    let cumulativeResponse = StringBuilder()
+                    // 使用 StringBuilder 結構來累積響應，避免頻繁的字符串拼接
+                    var cumulativeResponse = StringBuilder()
                     
                     try await openAIServiceRef.streamOpenAiApi(
                         text: textToProcess,
@@ -1618,32 +1618,37 @@ extension AppDelegate: NSWindowDelegate {
     }
 }
 
-// 優化的 StringBuilder 類別，使用更高效的記憶體管理
-private class StringBuilder {
-    private var buffer: String = ""
+// 高效的 StringBuilder 實現，使用陣列累積避免頻繁的字串拼接
+private struct StringBuilder {
+    private var components: [String] = []
     private let maxCapacity = 10000
     
     var length: Int {
-        return buffer.count
+        return components.reduce(0) { $0 + $1.count }
     }
     
-    func append(_ string: String) {
-        buffer += string
+    mutating func append(_ string: String) {
+        components.append(string)
         
-        // 避免字符串過大導致記憶體問題
-        if buffer.count > maxCapacity {
-            // 保留最後的 80% 內容
-            let keepLength = Int(Double(maxCapacity) * 0.8)
-            let startIndex = buffer.index(buffer.endIndex, offsetBy: -keepLength)
-            buffer = String(buffer[startIndex...])
+        // 定期合併小段文字避免過多的陣列元素
+        if components.count > 100 {
+            let joinedString = components.joined()
+            components = [joinedString]
+            
+            // 避免字符串過大導致記憶體問題
+            if joinedString.count > maxCapacity {
+                let keepLength = Int(Double(maxCapacity) * 0.8)
+                let startIndex = joinedString.index(joinedString.endIndex, offsetBy: -keepLength)
+                components = [String(joinedString[startIndex...])]
+            }
         }
     }
     
     func toString() -> String {
-        return buffer
+        return components.joined()
     }
     
-    func clear() {
-        buffer = ""
+    mutating func clear() {
+        components.removeAll()
     }
 }

@@ -3,6 +3,7 @@ import os.log
 import SwiftUI
 
 /// 集中式日誌管理器
+@MainActor
 class LogManager {
     /// 單例實例
     static let shared = LogManager()
@@ -265,21 +266,17 @@ class LogManager {
         // 創建日誌條目
         let entry = LogEntry(level: level.rawValue, category: category, message: message, subsystem: subsystem)
         
-        // 添加到內存中
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            self.logEntries.append(entry)
-            
-            // 如果超過最大條數，則刪除最舊的
-            if self.logEntries.count > self.maxLogEntries {
-                self.logEntries.removeFirst()
-            }
-            
-            // 每10條日誌保存一次，或者距離上次保存超過30秒
-            if self.logEntries.count % 10 == 0 || Date().timeIntervalSince(self.lastSaveTime) > self.saveInterval {
-                self.saveLogsToFile()
-            }
+        // 直接添加到內存中（已經在 MainActor 上下文中）
+        logEntries.append(entry)
+        
+        // 如果超過最大條數，則刪除最舊的
+        if logEntries.count > maxLogEntries {
+            logEntries.removeFirst()
+        }
+        
+        // 每10條日誌保存一次，或者距離上次保存超過30秒
+        if logEntries.count % 10 == 0 || Date().timeIntervalSince(lastSaveTime) > saveInterval {
+            saveLogsToFile()
         }
     }
     
