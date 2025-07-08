@@ -434,7 +434,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             let systemPromptCopy = self.systemPrompt
             let textWindowManager = self.textWindowManager
             // 獲取 AI 服務引用（新的統一服務）
-            let aiService = AIService.shared
+            let aiService = OpenAIService()
             let selectedModel = AppSettings.shared.selectedModel
             
             // 獲取 self 的弱引用，供後續閉包使用
@@ -454,8 +454,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
                 
                 do {
-                    // 使用新的 AIService 進行文字校正
-                    let correctedText = try await aiService.correctText(textToProcess, model: selectedModel)
+                    // 使用 OpenAIService 的流式 API 進行文字校正
+                    var correctedText = ""
+                    try await aiService.streamOpenAiApi(
+                        text: textToProcess,
+                        apiKeyProvider: { AppSettings.shared.getAPIKeyForSelectedModel() },
+                        systemPrompt: systemPromptCopy,
+                        onNewContent: { newContent in
+                            correctedText += newContent
+                        },
+                        onError: { error in
+                            print("OpenAI API error: \(error)")
+                        }
+                    )
                     
                     // 模擬流式更新 UI（為了保持現有的用戶體驗）
                     await MainActor.run {
@@ -537,7 +548,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 try await NotificationManager.shared.sendCorrectionCompleteNotification(
                                     originalTextCount: textToProcess.count,
                                     correctedTextCount: correctedText.count,
-                                    processingTime: processingTime
+                                    wordsChanged: 0  // 暫時使用 0，之後可以實現具體的計算
                                 )
                             } catch {
                                 loggerCopy.error("發送通知失敗: \(error.localizedDescription)")
@@ -550,7 +561,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                         AppState.shared.isProcessing = false
                         AppState.shared.processingProgress = 0.0
                         
-                        if let aiError = error as? AIServiceError {
+                        if let aiError = error as? OpenAIError {
                             switch aiError {
                             case .invalidAPIKey:
                                 AppState.shared.errorMessage = "API 金鑰無效，請檢查設定"
@@ -1475,10 +1486,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.orderFront(nil)
         
         // 在後台線程創建診斷報告
-        DispatchQueue.global(qos: .userInitiated).async {
-            if let reportURL = LogManager.shared.exportDiagnosticReport() {
+        Task {
+            if let reportURL = await LogManager.shared.exportDiagnosticReport() {
                 // 切換到主線程顯示結果
-                DispatchQueue.main.async {
+                await MainActor.run {
                     // 關閉進度提示
                     window.orderOut(nil)
                     
@@ -1500,7 +1511,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 }
             } else {
                 // 處理錯誤
-                DispatchQueue.main.async {
+                await MainActor.run {
                     // 關閉進度提示
                     window.orderOut(nil)
                     

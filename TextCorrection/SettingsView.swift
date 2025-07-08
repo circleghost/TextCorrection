@@ -923,7 +923,7 @@ struct SettingsView: View {
         Task {
             do {
                 // 使用新的 AIService 進行實際API驗證
-                try await AIService.shared.validateAPIKey(currentApiKey, for: provider)
+                try await OpenAIService().validateAPIKey(currentApiKey)
                 
                 // 在主線程更新UI
                 await MainActor.run {
@@ -931,7 +931,7 @@ struct SettingsView: View {
                     showSuccessMessage("\(provider.displayName) API 金鑰驗證成功")
                     isValidating = false
                 }
-            } catch let apiError as AIServiceError {
+            } catch let apiError as OpenAIError {
                 await MainActor.run {
                     appState.safelyUpdate(\.isApiKeyValid, value: false)
                     var errorMessage = "API 金鑰驗證失敗"
