@@ -350,8 +350,14 @@ actor OpenAIService {
     
     /// 檢查服務是否可用
     nonisolated func isAvailable() -> Bool {
-        // 檢查是否有有效的API密鑰
-        if UserDefaults.standard.string(forKey: "openai_api_key")?.isEmpty ?? true {
+        // 檢查是否有有效的API密鑰 - 修復：使用正確的 Keychain 檢查
+        let apiKey = SecureAPIKeyManager.getAPIKey()
+        if apiKey.isEmpty {
+            return false
+        }
+        
+        // 檢查 API 金鑰格式是否有效
+        if !apiKey.hasPrefix("sk-") || apiKey.count < 20 {
             return false
         }
         

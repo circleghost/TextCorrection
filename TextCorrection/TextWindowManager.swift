@@ -614,6 +614,29 @@ class TextWindowManager: ObservableObject {
         // 確保文字視圖可以接收滑鼠事件，允許文字選取
         textView.isSelectable = true
 
+        // 先在文字視窗中顯示原始文字，讓用戶立即看到內容
+        let initialAttributedString = NSMutableAttributedString(string: text)
+        initialAttributedString.addAttributes([
+            .font: getPungyuFont(size: 26),
+            .foregroundColor: NSColor.white
+        ], range: NSRange(location: 0, length: text.count))
+        
+        textView.textStorage?.setAttributedString(initialAttributedString)
+        
+        Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+            .info("[創建窗口] 已顯示原始文字，字數: \(text.count)")
+        
+        // 添加處理狀態提示
+        let processingText = "\n\n⏳ 正在進行文字校正，請稍候..."
+        let processingString = NSMutableAttributedString(string: processingText)
+        processingString.addAttributes([
+            .font: getPungyuFont(size: 20),
+            .foregroundColor: NSColor.systemYellow
+        ], range: NSRange(location: 0, length: processingText.count))
+        
+        initialAttributedString.append(processingString)
+        textView.textStorage?.setAttributedString(initialAttributedString)
+
         // 開始重寫
         appDelegate.rewriteText()
 

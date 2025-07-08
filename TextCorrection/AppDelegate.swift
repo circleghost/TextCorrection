@@ -451,8 +451,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 guard openAIServiceRef.isAvailable() else {
                     await MainActor.run {
                         AppState.shared.isProcessing = false
-                        AppState.shared.errorMessage = "API 服務當前不可用"
-                        loggerCopy.error("API 服務當前不可用，無法處理文本")
+                        let apiKey = SecureAPIKeyManager.getAPIKey()
+                        if apiKey.isEmpty {
+                            AppState.shared.errorMessage = "尚未設置 OpenAI API 金鑰，請前往偏好設定進行設置"
+                        } else if !apiKey.hasPrefix("sk-") || apiKey.count < 20 {
+                            AppState.shared.errorMessage = "API 金鑰格式無效，請檢查您的設置"
+                        } else {
+                            AppState.shared.errorMessage = "API 服務當前不可用，請稍後再試"
+                        }
+                        loggerCopy.error("API 服務當前不可用，無法處理文本。API金鑰狀態: 長度=\(apiKey.count), 有效格式=\(apiKey.hasPrefix("sk-"))")
                     }
                     return
                 }
