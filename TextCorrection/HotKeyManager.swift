@@ -481,37 +481,64 @@ class HotKeyManager {
         simulateCopyKeyPress()
         logger.info("[熱鍵觸發] 已執行模擬複製操作")
         
-        // 給系統一些時間處理複製操作
+        // 給系統一些時間處理複製操作，並使用重試機制
         Task { @MainActor in
             logger.info("[熱鍵觸發] 等待剪貼板更新")
-            // 等待 0.2 秒
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
             
-            // 從剪貼板獲取文本
-            guard let selectedText = NSPasteboard.general.string(forType: .string), !selectedText.isEmpty else {
-                self.logger.warning("[熱鍵觸發] 未能從剪貼板獲取到文本")
+            var selectedText: String?
+            var attempts = 0
+            let maxAttempts = 3
+            
+            // 重試機制，每次等待更長時間
+            while attempts < maxAttempts && (selectedText?.isEmpty ?? true) {
+                attempts += 1
+                let waitTime = UInt64(300_000_000 * attempts) // 0.3秒, 0.6秒, 0.9秒
+                
+                self.logger.info("[熱鍵觸發] 第 \(attempts) 次嘗試獲取剪貼板內容，等待 \(waitTime/1_000_000)ms")
+                try? await Task.sleep(nanoseconds: waitTime)
+                
+                selectedText = NSPasteboard.general.string(forType: .string)
+                
+                if let text = selectedText, !text.isEmpty {
+                    self.logger.info("[熱鍵觸發] 第 \(attempts) 次嘗試成功，獲取到文本長度: \(text.count)")
+                    self.logger.debug("[熱鍵觸發] 獲取到的文本前100字符: \(String(text.prefix(100)))")
+                    break
+                } else {
+                    self.logger.warning("[熱鍵觸發] 第 \(attempts) 次嘗試失敗，剪貼板內容為空或nil")
+                }
+            }
+            
+            guard let finalText = selectedText, !finalText.isEmpty else {
+                self.logger.error("[熱鍵觸發] 經過 \(maxAttempts) 次嘗試後仍未能從剪貼板獲取到文本")
+                
+                // 顯示用戶友好的錯誤消息
+                let alert = NSAlert()
+                alert.messageText = "無法獲取選取的文字"
+                alert.informativeText = "請確保：\n1. 已選取文字\n2. 應用程式允許複製操作\n3. 已授予輔助功能權限"
+                alert.alertStyle = .warning
+                alert.runModal()
                 return
             }
             
-            self.logger.info("[熱鍵觸發] 從剪貼板獲取到文本，長度: \(selectedText.count)")
+            self.logger.info("[熱鍵觸發] 最終獲取到文本，長度: \(finalText.count)")
             
             // 首先檢查實例變量中的 AppDelegate 引用
             if let appDelegate = self.appDelegate {
                 self.logger.info("[熱鍵觸發] 使用實例變量中的 AppDelegate")
-                appDelegate.directlyProcessHotkeySelection(selectedText)
+                appDelegate.directlyProcessHotkeySelection(finalText)
                 return
             }
             
             // 如果實例變量中沒有，則嘗試從 AppKitBridge 獲取
             if let appDelegate = AppKitBridge.shared.appDelegate {
                 self.logger.info("[熱鍵觸發] 使用 AppKitBridge 中的 AppDelegate")
-                appDelegate.directlyProcessHotkeySelection(selectedText)
+                appDelegate.directlyProcessHotkeySelection(finalText)
                 return
             }
             
             // 如果仍然無法獲取 AppDelegate，則直接使用 AppKitBridge 顯示文本窗口
             self.logger.warning("[熱鍵觸發] 無法獲取 AppDelegate，使用 AppKitBridge 顯示窗口")
-            AppKitBridge.shared.showTextCorrectionWindow(withText: selectedText)
+            AppKitBridge.shared.showTextCorrectionWindow(withText: finalText)
         }
     }
     
@@ -519,11 +546,10 @@ class HotKeyManager {
     private func simulateCopyKeyPress() {
         logger.info("模擬 Command+C 複製操作")
         
-        // 注銷熱鍵
+        // 暫停熱鍵避免重複觸發（不是注銷）
         if let key = hotKey {
             key.isPaused = true
-            hotKey = nil
-            logger.debug("熱鍵已注銷")
+            logger.debug("熱鍵已暫停")
         }
         
         // 創建一個包含 Command+C 的事件
@@ -537,6 +563,16 @@ class HotKeyManager {
         // 發送事件
         keyDownEvent?.post(tap: .cghidEventTap)
         keyUpEvent?.post(tap: .cghidEventTap)
+        
+        logger.debug("Command+C 事件已發送")
+        
+        // 稍後重新啟用熱鍵
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            if let key = self?.hotKey {
+                key.isPaused = false
+                self?.logger.debug("熱鍵已重新啟用")
+            }
+        }
     }
     
     // 從用戶設置加載熱鍵
