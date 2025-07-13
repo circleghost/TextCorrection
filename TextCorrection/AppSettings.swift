@@ -22,6 +22,7 @@ class AppSettings: ObservableObject {
         static let selectedModel = "selected_model"
         static let openaiApiKey = "openai_api_key"
         static let geminiApiKey = "gemini_api_key"
+        static let textStreamingSpeed = "text_streaming_speed"
     }
     
     /// 忽略字詞列表
@@ -161,6 +162,19 @@ class AppSettings: ObservableObject {
     func hasValidAPIKeyForSelectedModel() -> Bool {
         let apiKey = getAPIKeyForSelectedModel()
         return !apiKey.isEmpty && apiKey.count > 10 // 簡單的長度檢查
+    }
+    
+    /// 文字流動速度 (秒)
+    var textStreamingSpeed: Double {
+        get {
+            let speed = UserDefaults.standard.double(forKey: UserDefaultsKeys.textStreamingSpeed)
+            return speed == 0 ? 0.08 : speed // 預設 80ms
+        }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.textStreamingSpeed)
+            logger.debug("文字流動速度已更新為: \(newValue)秒")
+        }
     }
     
     /// 配置是否開機啟動

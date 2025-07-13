@@ -671,6 +671,44 @@ struct SettingsView: View {
                         .font(UIConstants.captionFont)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
+                    
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("文字流動速度")
+                                .font(UIConstants.bodyFont.weight(.medium))
+                            Spacer()
+                            Text("\(Int(appSettings.textStreamingSpeed * 1000))ms")
+                                .font(UIConstants.captionFont)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack {
+                            Text("快")
+                                .font(UIConstants.captionFont)
+                                .foregroundColor(.secondary)
+                            
+                            Slider(
+                                value: Binding(
+                                    get: { appSettings.textStreamingSpeed },
+                                    set: { appSettings.textStreamingSpeed = $0 }
+                                ),
+                                in: 0.02...0.15,
+                                step: 0.01
+                            )
+                            .accentColor(UIConstants.primaryColor)
+                            
+                            Text("慢")
+                                .font(UIConstants.captionFont)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("調整文字逐字顯示的速度，數值越小速度越快")
+                            .font(UIConstants.captionFont)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .cardStyle()
             }

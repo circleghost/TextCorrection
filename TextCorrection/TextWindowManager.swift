@@ -1914,7 +1914,8 @@ class TextWindowManager: ObservableObject {
         
         // 以較小的塊大小進行文字流動，創造真正的流動效果
         let chunkSize = 1 // 每次添加1個字符
-        let streamDelay = 0.015 // 15ms間隔，可見的流動效果
+        // 根據使用者設定的流動速度調整
+        let streamDelay = AppState.shared.isAnimationsEnabled ? AppSettings.shared.textStreamingSpeed : 0.02 // 使用者設定或20ms快速模式
         
         let totalLength = attributedString.length
         var currentIndex = 0

@@ -105,32 +105,36 @@ struct TextDifferenceView: NSViewRepresentable {
 
 /// 流光特效視圖
 struct FlowingGlowView: View {
+    @EnvironmentObject private var appState: AppState
     @State private var animate = false
     
     var body: some View {
         ZStack {
-            ForEach(0..<5) { i in
+            // 根據高品質效果設定調整流光數量
+            let glowCount = appState.isHighQualityEffectsEnabled ? 5 : 3
+            ForEach(0..<glowCount, id: \.self) { i in
                 Circle()
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color(red: 0.3, green: 0.7, blue: 0.9, opacity: 0.7),
-                                Color(red: 0.5, green: 0.3, blue: 0.9, opacity: 0.4)
+                                Color(red: 0.3, green: 0.7, blue: 0.9, opacity: appState.isHighQualityEffectsEnabled ? 0.7 : 0.5),
+                                Color(red: 0.5, green: 0.3, blue: 0.9, opacity: appState.isHighQualityEffectsEnabled ? 0.4 : 0.3)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 300, height: 300)
-                    .blur(radius: 25)
+                    .blur(radius: appState.isHighQualityEffectsEnabled ? 25 : 15)
                     .offset(
                         x: animate ? CGFloat.random(in: -120...120) : CGFloat.random(in: -180...180),
                         y: animate ? CGFloat.random(in: -70...70) : CGFloat.random(in: -120...120)
                     )
                     .animation(
+                        appState.isAnimationsEnabled ? 
                         Animation.easeInOut(duration: Double.random(in: 4...7))
                             .repeatForever(autoreverses: true)
-                            .delay(Double.random(in: 0...2)),
+                            .delay(Double.random(in: 0...2)) : .none,
                         value: animate
                     )
             }
@@ -138,7 +142,7 @@ struct FlowingGlowView: View {
         .clipped()
         .drawingGroup() // 使用Metal渲染以提高性能
         .onAppear {
-            animate = true
+            animate = appState.isAnimationsEnabled
         }
     }
 }
@@ -203,12 +207,18 @@ struct ParticleEffectView: View {
         // 清除現有計時器
         timer?.invalidate()
         
-        // 創建新計時器，每0.3秒生成一個新粒子
-        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
-            withAnimation {
+        // 根據設定調整粒子生成頻率
+        let interval = appState.isHighQualityEffectsEnabled ? 0.3 : 0.5
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            if appState.isAnimationsEnabled {
+                withAnimation {
+                    addParticle(in: size)
+                    
+                    // 移除不可見的粒子
+                    particles = particles.filter { $0.opacity > 0 }
+                }
+            } else {
                 addParticle(in: size)
-                
-                // 移除不可見的粒子
                 particles = particles.filter { $0.opacity > 0 }
             }
         }
@@ -239,8 +249,17 @@ struct ParticleEffectView: View {
         
         particles.append(newParticle)
         
-        // 添加動畫效果
-        withAnimation(Animation.linear(duration: Double.random(in: 2...5))) {
+        // 根據動畫設定添加動畫效果
+        if appState.isAnimationsEnabled {
+            withAnimation(Animation.linear(duration: Double.random(in: 2...5))) {
+                if let index = particles.firstIndex(where: { $0.id == newParticle.id }) {
+                    particles[index].opacity = 0
+                    particles[index].position.y -= CGFloat.random(in: 30...70)
+                    particles[index].rotation += Double.random(in: 180...360)
+                }
+            }
+        } else {
+            // 無動畫模式下立即設定最終狀態
             if let index = particles.firstIndex(where: { $0.id == newParticle.id }) {
                 particles[index].opacity = 0
                 particles[index].position.y -= CGFloat.random(in: 30...70)
@@ -298,6 +317,7 @@ struct TextCorrectionView: View {
                 // 僅當啟用視覺效果時顯示流光效果
                 if appState.isVisualEffectsEnabled {
                     FlowingGlowView()
+                        .environmentObject(appState)
                         .opacity(0.35)
                 }
                 
@@ -331,9 +351,13 @@ struct TextCorrectionView: View {
                             )
                             .padding([.horizontal, .top])
                             .opacity(isTextVisible ? 1 : 0)
-                            .animation(.easeIn(duration: 0.5), value: isTextVisible)
+                            .animation(appState.isAnimationsEnabled ? .easeIn(duration: 0.5) : .none, value: isTextVisible)
                             .onAppear {
-                                withAnimation {
+                                if appState.isAnimationsEnabled {
+                                    withAnimation {
+                                        isTextVisible = true
+                                    }
+                                } else {
                                     isTextVisible = true
                                 }
                                 showParticles = appState.isParticleEffectsEnabled
