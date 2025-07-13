@@ -375,7 +375,7 @@ struct TextProcessing {
         }
     }
     
-    // 實作簡化但可靠的差異演算法
+    // 實作簡化但可靠的字符級差異演算法
     private static func myersDiff(oldChars: [Character], newChars: [Character]) -> [DiffChange] {
         let oldString = String(oldChars)
         let newString = String(newChars)
@@ -385,74 +385,70 @@ struct TextProcessing {
         if newString.isEmpty { return [.delete(oldString)] }
         if oldString == newString { return [.equal(oldString)] }
         
-        // 使用簡單的單詞級別差異比較
-        return simpleWordDiff(oldString, newString)
+        // 使用字符級別的差異比較
+        return characterLevelDiff(oldString, newString)
     }
     
-    // 簡單且可靠的差異比較方法
-    private static func simpleWordDiff(_ old: String, _ new: String) -> [DiffChange] {
+    // 字符級別的可靠差異比較方法
+    private static func characterLevelDiff(_ old: String, _ new: String) -> [DiffChange] {
         // 如果字符串完全相同
         if old == new {
             return [.equal(old)]
         }
         
-        // 使用字符級別的比較，但以詞為單位處理
-        let oldWords = old.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        let newWords = new.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        // 轉換為字符數組進行比較
+        let oldChars = Array(old)
+        let newChars = Array(new)
         
         // 如果一個為空
-        if oldWords.isEmpty {
+        if oldChars.isEmpty {
             return [.insert(new)]
         }
-        if newWords.isEmpty {
+        if newChars.isEmpty {
             return [.delete(old)]
         }
         
-        // 使用簡單的編輯距離方法進行比較
+        // 使用動態規劃計算最優編輯路徑
+        let lcs = findLCS(oldChars, newChars)
+        return buildDiffFromLCS(oldChars: oldChars, newChars: newChars, lcs: lcs)
+    }
+    
+    // 從LCS構建差異序列
+    private static func buildDiffFromLCS(oldChars: [Character], newChars: [Character], lcs: [Character]) -> [DiffChange] {
         var result = [DiffChange]()
-        var i = 0, j = 0
+        var i = 0, j = 0, k = 0
         
-        while i < oldWords.count || j < newWords.count {
-            if i < oldWords.count && j < newWords.count {
-                let oldWord = oldWords[i]
-                let newWord = newWords[j]
-                
-                if oldWord == newWord {
-                    // 相同的詞
-                    result.append(.equal(oldWord))
-                    if j < newWords.count - 1 || i < oldWords.count - 1 {
-                        result.append(.equal(" ")) // 添加空格
-                    }
-                    i += 1
-                    j += 1
-                } else {
-                    // 不同的詞，視為替換
-                    result.append(.delete(oldWord))
-                    result.append(.insert(newWord))
-                    if j < newWords.count - 1 || i < oldWords.count - 1 {
-                        result.append(.equal(" ")) // 添加空格
-                    }
-                    i += 1
-                    j += 1
-                }
-            } else if i < oldWords.count {
-                // 只有舊詞剩餘
-                result.append(.delete(oldWords[i]))
-                if i < oldWords.count - 1 {
-                    result.append(.delete(" "))
-                }
+        while i < oldChars.count || j < newChars.count {
+            if k < lcs.count && i < oldChars.count && j < newChars.count && 
+               oldChars[i] == newChars[j] && oldChars[i] == lcs[k] {
+                // 找到共同字符
+                result.append(.equal(String(oldChars[i])))
                 i += 1
-            } else if j < newWords.count {
-                // 只有新詞剩餘
-                result.append(.insert(newWords[j]))
-                if j < newWords.count - 1 {
-                    result.append(.insert(" "))
-                }
                 j += 1
+                k += 1
+            } else if i < oldChars.count && (k >= lcs.count || oldChars[i] != lcs[k]) {
+                // 需要刪除的字符
+                result.append(.delete(String(oldChars[i])))
+                i += 1
+            } else if j < newChars.count && (k >= lcs.count || newChars[j] != lcs[k]) {
+                // 需要插入的字符
+                result.append(.insert(String(newChars[j])))
+                j += 1
+            } else {
+                // 這種情況應該不會發生，但為了安全起見
+                if i < oldChars.count {
+                    result.append(.delete(String(oldChars[i])))
+                    i += 1
+                }
+                if j < newChars.count {
+                    result.append(.insert(String(newChars[j])))
+                    j += 1
+                }
             }
         }
         
-        return result
+        // 合併相鄰的相同操作以提高效率
+        return mergeAdjacentChanges(result)
     }
     
     // 找出最長共同子序列

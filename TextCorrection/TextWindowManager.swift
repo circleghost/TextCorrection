@@ -1380,11 +1380,10 @@ class TextWindowManager: ObservableObject {
 
     // 提取通用的 UI 更新邏輯到一個單獨的方法
     private func updateTextViewWithAttributedString(attributedString: NSAttributedString, originalText: String, newText: String, textView: NSTextView) {
-        // 確保在主線程執行UI更新
-        if !Thread.isMainThread {
+        // 確保在主線程執行UI更新 - 移除複雜的async/await混合模式
+        guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.updateTextViewWithAttributedString(attributedString: attributedString, 
+                self?.updateTextViewWithAttributedString(attributedString: attributedString, 
                                                        originalText: originalText, 
                                                        newText: newText, 
                                                        textView: textView)
@@ -1392,82 +1391,42 @@ class TextWindowManager: ObservableObject {
             return
         }
         
-        // 使用弱引用，避免強引用循環
-        Task { @MainActor [weak self, weak textView] in
-            // 安全檢查，確保視圖和窗口仍然有效
-            guard let self = self,
-                  let textView = textView,
-                  let window = textView.window,
-                  let scrollView = textView.enclosingScrollView else {
-                Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                    .error("UI 更新時找不到有效的視圖階層")
-                return
-            }
-            
-            // 保存目前的滾動位置
-            let visibleRect = scrollView.contentView.bounds
-            let wasAtBottom = (visibleRect.maxY >= scrollView.documentView?.bounds.maxY ?? 0)
-            
-            // 使用真正的字符級文字流動效果
-            await self.animateTextStream(attributedString: attributedString, textView: textView, window: window)
-            
-            // 恢復滾動位置
-            if wasAtBottom {
-                textView.scrollToEndOfDocument(nil)
-            } else {
-                scrollView.contentView.scroll(to: visibleRect.origin)
-                scrollView.reflectScrolledClipView(scrollView.contentView)
-            }
-            
-            // 確保文本視圖可見並且窗口更新
-            textView.needsDisplay = true
-            window.update()
-            
-            // 更新統計信息
-            updateStatisticsInfo(originalText: originalText, correctedText: newText)
-            
-            // 等待布局完成
-            try? await Task.sleep(nanoseconds: 200_000_000) // 0.2秒
-            
-            // 調整視窗大小
-            if let scrollView = textView.enclosingScrollView {
-                updateWindowSizeIfNeeded(textView: textView, scrollView: scrollView)
-            }
-            
-            // 確保捲動到內容頂部，以便用戶可以從頭開始閱讀
-            if textView.string.count > 0 {
-                // 首先確保文本視圖有足夠大小容納內容
-                let layoutManager = textView.layoutManager!
-                let textContainer = textView.textContainer!
-                let glyphRange = layoutManager.glyphRange(for: textContainer)
-                let boundingRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-                
-                // 設置文本視圖大小以適應內容
-                let newHeight = boundingRect.height + textView.textContainerInset.height * 2
-                if textView.frame.size.height < newHeight {
-                    textView.frame.size.height = newHeight
-                }
-                
-                // 捲動到頂部
-                let topRange = NSRange(location: 0, length: min(100, textView.string.count))
-                textView.scrollRangeToVisible(topRange)
-                
-                // 強制更新捲動視圖
-                if let scrollView = textView.enclosingScrollView {
-                    scrollView.reflectScrolledClipView(scrollView.contentView)
-                    
-                    // 確保垂直捲動條可見
-                    scrollView.hasVerticalScroller = true
-                    if let scroller = scrollView.verticalScroller {
-                        scroller.isHidden = false
-                        scroller.needsDisplay = true
-                    }
-                    
-                    // 記錄捲動操作
-                    Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
-                        .debug("捲動到內容頂部，確保UI元素可見")
-                }
-            }
+        // 安全檢查，確保視圖和窗口仍然有效
+        guard let window = textView.window,
+              let scrollView = textView.enclosingScrollView else {
+            Logger(subsystem: "com.yourcompany.TextCorrection", category: "TextWindowManager")
+                .error("UI 更新時找不到有效的視圖階層")
+            return
+        }
+        
+        // 保存目前的滾動位置
+        let visibleRect = scrollView.contentView.bounds
+        let wasAtBottom = (visibleRect.maxY >= scrollView.documentView?.bounds.maxY ?? 0)
+        
+        // 直接更新文本，不使用動畫避免文字錯亂
+        textView.layoutManager?.allowsNonContiguousLayout = false
+        textView.textStorage?.beginEditing()
+        textView.textStorage?.setAttributedString(attributedString)
+        textView.textStorage?.endEditing()
+        
+        // 恢復滾動位置
+        if wasAtBottom {
+            textView.scrollToEndOfDocument(nil)
+        } else {
+            scrollView.contentView.scroll(to: visibleRect.origin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        
+        // 確保文本視圖可見並且窗口更新
+        textView.needsDisplay = true
+        window.update()
+        
+        // 更新統計信息
+        updateStatisticsInfo(originalText: originalText, correctedText: newText)
+        
+        // 調整視窗大小
+        if let scrollView = textView.enclosingScrollView {
+            updateWindowSizeIfNeeded(textView: textView, scrollView: scrollView)
         }
     }
     
