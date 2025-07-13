@@ -468,7 +468,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                         }
                     )
                     
-                    // 模擬流式更新 UI（為了保持現有的用戶體驗）
+                    // 清理 LLM 輸出中的 markdown 標記
+                    correctedText = extractMarkdownBlock(correctedText)
+                    
+                    // 等待完整回應後更新 UI（避免 stream 過程中的顯示問題）
                     await MainActor.run {
                         // 檢查應用程序是否仍在運行
                         guard NSApp.isRunning else { return }
