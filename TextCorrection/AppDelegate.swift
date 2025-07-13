@@ -456,12 +456,67 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 do {
                     // 使用 OpenAIService 的流式 API 進行文字校正
                     var correctedText = ""
+                    let streamingSpeed = AppSettings.shared.textStreamingSpeed
+                    
                     try await aiService.streamOpenAiApi(
                         text: textToProcess,
                         apiKeyProvider: { AppSettings.shared.getAPIKeyForSelectedModel() },
                         systemPrompt: systemPromptCopy,
                         onNewContent: { newContent in
+                            // 累積完整內容
                             correctedText += newContent
+                            
+                            // 實時更新UI顯示文字流效果
+                            Task { @MainActor in
+                                // 檢查應用程序是否仍在運行
+                                guard NSApp.isRunning else { return }
+                                
+                                // 獲取當前的 textView
+                                if let textView = self.currentTextView {
+                                    // 字符級別的逐字顯示新內容
+                                    var displayText = correctedText.dropLast(newContent.count) // 移除新內容，從之前的位置開始
+                                    
+                                    for char in newContent {
+                                        // 添加當前字符到顯示文字
+                                        displayText += String(char)
+                                        
+                                        // 清理文字（暫時不清理，避免打斷流效果）
+                                        let cleanedText = String(displayText)
+                                        
+                                        // 設置段落樣式
+                                        let paragraphStyle = NSMutableParagraphStyle()
+                                        paragraphStyle.lineSpacing = 8
+                                        paragraphStyle.lineBreakMode = .byWordWrapping
+                                        
+                                        // 創建帶樣式的文字
+                                        let attributedString = NSAttributedString(
+                                            string: cleanedText,
+                                            attributes: [
+                                                .font: NSFont.systemFont(ofSize: 22),
+                                                .foregroundColor: NSColor.white,
+                                                .paragraphStyle: paragraphStyle
+                                            ]
+                                        )
+                                        
+                                        // 更新文字顯示
+                                        textView.textStorage?.setAttributedString(attributedString)
+                                        
+                                        // 自動滾動到底部
+                                        textView.scrollToEndOfDocument(nil)
+                                        
+                                        // 更新窗口大小
+                                        if let windowManager = self.textWindowManager, !windowManager.isDestroyed {
+                                            windowManager.resizeWindowToFitContent()
+                                        }
+                                        
+                                        // 等待指定的流動速度時間
+                                        try? await Task.sleep(nanoseconds: UInt64(streamingSpeed * 1_000_000_000))
+                                        
+                                        // 檢查是否仍在運行
+                                        guard NSApp.isRunning else { break }
+                                    }
+                                }
+                            }
                         },
                         onError: { error in
                             print("OpenAI API error: \(error)")
