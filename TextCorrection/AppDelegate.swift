@@ -458,6 +458,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     var correctedText = ""
                     let streamingSpeed = AppSettings.shared.textStreamingSpeed
                     
+                    // 在開始流動之前清空文字視圖，避免重疊
+                    await MainActor.run {
+                        if let textView = currentTextView {
+                            textView.string = ""
+                        }
+                    }
+                    
                     try await aiService.streamOpenAiApi(
                         text: textToProcess,
                         apiKeyProvider: { AppSettings.shared.getAPIKeyForSelectedModel() },
@@ -473,47 +480,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 
                                 // 獲取當前的 textView
                                 if let textView = self.currentTextView {
-                                    // 字符級別的逐字顯示新內容
-                                    var displayText = correctedText.dropLast(newContent.count) // 移除新內容，從之前的位置開始
+                                    // 更效率的文字流動效果：直接附加新內容而不是逐字符更新
+                                    let cleanedNewContent = newContent
                                     
-                                    for char in newContent {
-                                        // 添加當前字符到顯示文字
-                                        displayText += String(char)
-                                        
-                                        // 清理文字（暫時不清理，避免打斷流效果）
-                                        let cleanedText = String(displayText)
-                                        
-                                        // 設置段落樣式
-                                        let paragraphStyle = NSMutableParagraphStyle()
-                                        paragraphStyle.lineSpacing = 8
-                                        paragraphStyle.lineBreakMode = .byWordWrapping
-                                        
-                                        // 創建帶樣式的文字
-                                        let attributedString = NSAttributedString(
-                                            string: cleanedText,
-                                            attributes: [
-                                                .font: NSFont.systemFont(ofSize: 22),
-                                                .foregroundColor: NSColor.white,
-                                                .paragraphStyle: paragraphStyle
-                                            ]
-                                        )
-                                        
-                                        // 更新文字顯示
-                                        textView.textStorage?.setAttributedString(attributedString)
-                                        
-                                        // 自動滾動到底部
-                                        textView.scrollToEndOfDocument(nil)
-                                        
-                                        // 更新窗口大小
-                                        if let windowManager = self.textWindowManager, !windowManager.isDestroyed {
-                                            windowManager.resizeWindowToFitContent()
-                                        }
-                                        
-                                        // 等待指定的流動速度時間
-                                        try? await Task.sleep(nanoseconds: UInt64(streamingSpeed * 1_000_000_000))
-                                        
-                                        // 檢查是否仍在運行
-                                        guard NSApp.isRunning else { break }
+                                    // 設置段落樣式
+                                    let paragraphStyle = NSMutableParagraphStyle()
+                                    paragraphStyle.lineSpacing = 8
+                                    paragraphStyle.lineBreakMode = .byWordWrapping
+                                    
+                                    // 創建新內容的屬性字串
+                                    let newContentAttributed = NSAttributedString(
+                                        string: cleanedNewContent,
+                                        attributes: [
+                                            .font: NSFont.systemFont(ofSize: 22),
+                                            .foregroundColor: NSColor.white,
+                                            .paragraphStyle: paragraphStyle
+                                        ]
+                                    )
+                                    
+                                    // 附加新內容而不是替換整個文字（減少閃爍）
+                                    textView.textStorage?.append(newContentAttributed)
+                                    
+                                    // 自動滾動到底部
+                                    textView.scrollToEndOfDocument(nil)
+                                    
+                                    // 更新窗口大小（減少頻率）
+                                    if let windowManager = self.textWindowManager, !windowManager.isDestroyed {
+                                        windowManager.resizeWindowToFitContent()
                                     }
                                 }
                             }
@@ -526,7 +519,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     // 清理 LLM 輸出中的 markdown 標記
                     correctedText = extractMarkdownBlock(correctedText)
                     
-                    // 等待完整回應後更新 UI（避免 stream 過程中的顯示問題）
+                    // 等待完整回應後更新 UI 顯示差異高亮
                     await MainActor.run {
                         // 檢查應用程序是否仍在運行
                         guard NSApp.isRunning else { return }
@@ -536,22 +529,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                         
                         // 獲取當前的 textView（如果存在）
                         if let textView = currentTextView {
-                            // 設置段落樣式
-                            let paragraphStyle = NSMutableParagraphStyle()
-                            paragraphStyle.lineSpacing = 8
-                            paragraphStyle.lineBreakMode = .byWordWrapping
-                            
-                            // 使用固定字體大小和樣式
-                            let attributedString = NSAttributedString(
-                                string: correctedText,
-                                attributes: [
-                                    .font: NSFont.systemFont(ofSize: 22),
-                                    .foregroundColor: NSColor.white,
-                                    .paragraphStyle: paragraphStyle
-                                ]
-                            )
-                            
-                            // 更新 textView 顯示差異
+                            // 直接顯示差異高亮，不再設置純白色文字
                             if let windowManager = textWindowManager, !windowManager.isDestroyed {
                                 windowManager.updateTextViewWithDiff(
                                     originalText: textToProcess,
