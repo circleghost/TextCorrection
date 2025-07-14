@@ -116,7 +116,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     4. 糾正錯字、錯詞和語法錯誤。
     5. 優化繁體中文表達，使文字更精簡、專業。
     
-    請將更正後的內容放在兩個三個反引號之間。不需要講解修改的原因。只需要給出修改後的文本。
+    請直接輸出更正後的內容，不需要任何格式標記或說明。只需要給出修改後的文本。
     """
 
     private var isApiKeyValid: Bool = false
@@ -481,7 +481,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                                 // 獲取當前的 textView
                                 if let textView = self.currentTextView {
                                     // 更效率的文字流動效果：直接附加新內容而不是逐字符更新
+                                    // 實時清理任何殘留的 markdown 標記
                                     let cleanedNewContent = newContent
+                                        .replacingOccurrences(of: "```", with: "")
+                                        .replacingOccurrences(of: "``", with: "")
+                                        .replacingOccurrences(of: "`", with: "")
                                     
                                     // 設置段落樣式
                                     let paragraphStyle = NSMutableParagraphStyle()
