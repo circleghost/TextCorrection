@@ -37,8 +37,12 @@ struct TextDifferenceView: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
+        scrollView.autohidesScrollers = false
         scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.scrollerStyle = .overlay
+        scrollView.verticalScrollElasticity = .allowed
+        scrollView.horizontalScrollElasticity = .none
         
         let textView = NSTextView()
         textView.isEditable = false
@@ -67,9 +71,11 @@ struct TextDifferenceView: NSViewRepresentable {
         paragraphStyle.lineBreakMode = .byWordWrapping
         textView.defaultParagraphStyle = paragraphStyle
         
-        // 設置文本容器以正確換行
+        // 設置文本容器以正確換行和滾動
         textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
         textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         
         scrollView.documentView = textView
@@ -99,6 +105,21 @@ struct TextDifferenceView: NSViewRepresentable {
         
         DispatchQueue.main.async {
             textView.textStorage?.setAttributedString(attributedString)
+            
+            // 確保文本視圖正確調整大小以顯示所有內容
+            textView.isVerticallyResizable = true
+            textView.isHorizontallyResizable = false
+            textView.textContainer?.widthTracksTextView = true
+            textView.textContainer?.heightTracksTextView = false
+            
+            // 強制重新計算佈局
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+            
+            // 確保滾動視圖反映內容變化
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            
+            // 滾動到頂部
+            scrollView.contentView.scroll(to: NSPoint.zero)
         }
     }
 }
@@ -338,37 +359,40 @@ struct TextCorrectionView: View {
                             .padding()
                             .transition(.scale.combined(with: .opacity))
                     } else if !appState.correctedText.isEmpty {
-                        ZStack {
-                            TextDifferenceView(
-                                originalText: appState.originalText,
-                                correctedText: appState.correctedText
-                            )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8)))
-                                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                            )
-                            .padding([.horizontal, .top])
-                            .opacity(isTextVisible ? 1 : 0)
-                            .animation(appState.isAnimationsEnabled ? .easeIn(duration: 0.5) : .none, value: isTextVisible)
-                            .onAppear {
-                                if appState.isAnimationsEnabled {
-                                    withAnimation {
+                        GeometryReader { geometry in
+                            ZStack {
+                                TextDifferenceView(
+                                    originalText: appState.originalText,
+                                    correctedText: appState.correctedText
+                                )
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(NSColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 0.8)))
+                                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                                )
+                                .padding([.horizontal, .top])
+                                .opacity(isTextVisible ? 1 : 0)
+                                .animation(appState.isAnimationsEnabled ? .easeIn(duration: 0.5) : .none, value: isTextVisible)
+                                .onAppear {
+                                    if appState.isAnimationsEnabled {
+                                        withAnimation {
+                                            isTextVisible = true
+                                        }
+                                    } else {
                                         isTextVisible = true
                                     }
-                                } else {
-                                    isTextVisible = true
+                                    showParticles = appState.isParticleEffectsEnabled
                                 }
-                                showParticles = appState.isParticleEffectsEnabled
-                            }
-                            
-                            // 粒子效果層
-                            if showParticles {
-                                ParticleEffectView()
-                                    .environmentObject(appState)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .allowsHitTesting(false)
+                                
+                                // 粒子效果層
+                                if showParticles {
+                                    ParticleEffectView()
+                                        .environmentObject(appState)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .allowsHitTesting(false)
+                                }
                             }
                         }
                     } else {
