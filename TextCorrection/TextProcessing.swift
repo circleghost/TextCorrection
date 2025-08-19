@@ -56,14 +56,25 @@ struct TextProcessing {
         // 合併和優化差異
         let optimizedDiff = optimizeDiff(diff)
         
+        // 創建空行專用的段落樣式（較小的行高）
+        let emptyLineParagraphStyle = NSMutableParagraphStyle()
+        emptyLineParagraphStyle.lineSpacing = 2  // 較小的行間距
+        
+        let emptyLineAttributes: [NSAttributedString.Key: Any] = [
+            .font: pungyuFont,
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: emptyLineParagraphStyle,
+            .kern: 1.5
+        ]
+        
         // 使用優化後的差異重新生成 attributedString
         for change in optimizedDiff {
             switch change {
             case .equal(let text):
                 // 檢查文本是否為換行符
                 if text == "\n" {
-                    // 使用段落結束來處理換行
-                    let newlineString = NSAttributedString(string: "\n", attributes: baseAttributes)
+                    // 使用空行專用樣式來處理換行
+                    let newlineString = NSAttributedString(string: "\n", attributes: emptyLineAttributes)
                     attributedString.append(newlineString)
                 } else {
                 attributedString.append(NSAttributedString(string: text, attributes: baseAttributes))
@@ -75,8 +86,11 @@ struct TextProcessing {
                 
                 // 檢查文本是否為換行符
                 if text == "\n" {
-                    // 插入帶有插入樣式的換行符
-                    let newlineString = NSAttributedString(string: "\n", attributes: attributes)
+                    // 插入帶有插入樣式的換行符，使用空行樣式
+                    var emptyLineInsertAttributes = emptyLineAttributes
+                    emptyLineInsertAttributes[.backgroundColor] = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 0.3)
+                    emptyLineInsertAttributes[.foregroundColor] = NSColor(red: 0.0, green: 0.8, blue: 0.0, alpha: 1.0)
+                    let newlineString = NSAttributedString(string: "\n", attributes: emptyLineInsertAttributes)
                     attributedString.append(newlineString)
                 } else {
                 attributedString.append(NSAttributedString(string: text, attributes: attributes))
@@ -89,8 +103,12 @@ struct TextProcessing {
                 
                 // 檢查文本是否為換行符
                 if text == "\n" {
-                    // 刪除帶有刪除樣式的換行符
-                    let newlineString = NSAttributedString(string: "\n", attributes: attributes)
+                    // 刪除帶有刪除樣式的換行符，使用空行樣式
+                    var emptyLineDeleteAttributes = emptyLineAttributes
+                    emptyLineDeleteAttributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                    emptyLineDeleteAttributes[.strikethroughColor] = NSColor.red
+                    emptyLineDeleteAttributes[.foregroundColor] = NSColor.red.withAlphaComponent(0.8)
+                    let newlineString = NSAttributedString(string: "\n", attributes: emptyLineDeleteAttributes)
                     attributedString.append(newlineString)
                 } else {
                 attributedString.append(NSAttributedString(string: text, attributes: attributes))
@@ -137,13 +155,31 @@ struct TextProcessing {
         let trimmedOriginal = original.trimmingCharacters(in: .whitespaces)
         let trimmedRewritten = rewritten.trimmingCharacters(in: .whitespaces)
         
+        // 合併多個連續空行為單個空行
+        let processedOriginal = mergeConsecutiveEmptyLines(trimmedOriginal)
+        let processedRewritten = mergeConsecutiveEmptyLines(trimmedRewritten)
+        
         // 只有純2字詞才考慮詞序問題
-        if trimmedOriginal.count == 2 && 
-           isJustWordOrderChange(trimmedOriginal, trimmedRewritten) {
-            return (trimmedOriginal, trimmedRewritten)
+        if processedOriginal.count == 2 && 
+           isJustWordOrderChange(processedOriginal, processedRewritten) {
+            return (processedOriginal, processedRewritten)
         }
         
-        return (trimmedOriginal, trimmedRewritten)
+        return (processedOriginal, processedRewritten)
+    }
+    
+    // 合併多個連續空行為單個空行
+    private static func mergeConsecutiveEmptyLines(_ text: String) -> String {
+        // 使用正則表達式將兩個或以上的連續換行符替換為單個換行符
+        let pattern = "\n{2,}"
+        do {
+            let regex = try NSRegularExpression(pattern: pattern, options: [])
+            let range = NSRange(location: 0, length: text.count)
+            return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "\n")
+        } catch {
+            logger.error("正則表達式錯誤: \(error)")
+            return text
+        }
     }
     
     // 移除文本中的多餘空白字符，但保留換行

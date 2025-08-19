@@ -41,7 +41,7 @@ struct TextDifferenceView: NSViewRepresentable {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.scrollerStyle = .overlay
-        scrollView.verticalScrollElasticity = .allowed
+        scrollView.verticalScrollElasticity = .none
         scrollView.horizontalScrollElasticity = .none
         
         let textView = NSTextView()
